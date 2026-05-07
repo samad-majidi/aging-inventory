@@ -1,0 +1,4688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aging Inventory Dashboard | Firstbase</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+/* ── CSS Variables ─────────────────────────────────────────── */
+:root{
+  --bg:#f0f2f5;
+  --surface:#fff;
+  --surface2:#f5f7fa;
+  --border:#e2e8f0;
+  --text:#1a202c;
+  --text-dim:#64748b;
+  --accent:#2563eb;
+  --accent2:#1d4ed8;
+  --red:#ef4444;
+  --orange:#f59e0b;
+  --yellow:#eab308;
+  --green:#22c55e;
+  --purple:#a855f7;
+  --sidebar-w:260px;
+}
+
+/* ── Reset / Base ──────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  background:var(--bg);color:var(--text);display:flex;min-height:100vh;font-size:14px;line-height:1.5}
+a{text-decoration:none;color:inherit}
+input,select,button{font-family:inherit;font-size:inherit}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.sidebar{
+  position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);
+  background:#1e293b;color:#cbd5e1;display:flex;flex-direction:column;
+  z-index:100;overflow-y:auto}
+.sidebar-brand{padding:24px 20px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-brand h1{font-size:16px;font-weight:700;color:#fff;letter-spacing:-.3px}
+.sidebar-brand p{font-size:11px;color:#94a3b8;margin-top:2px}
+
+.sidebar-nav{flex:1;padding:12px 0}
+.nav-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;
+  color:#64748b;padding:16px 20px 6px}
+.nav-link{display:flex;align-items:center;gap:10px;padding:10px 20px;font-size:13px;
+  color:#94a3b8;cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.nav-link:hover{background:rgba(255,255,255,.05);color:#e2e8f0}
+.nav-link.active{color:#fff;background:rgba(37,99,235,.12);border-left-color:var(--accent)}
+.nav-link svg{width:18px;height:18px;flex-shrink:0;opacity:.7}
+.nav-link.active svg{opacity:1}
+
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:11px}
+.api-status{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.api-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+.api-dot.offline{background:var(--red)}
+.sidebar-footer .last-updated{color:#64748b;font-size:10px}
+
+/* ── Main Area ─────────────────────────────────────────────── */
+.main{margin-left:var(--sidebar-w);flex:1;padding:28px 32px 40px;min-width:0}
+
+/* ── Sections ──────────────────────────────────────────────── */
+.section{display:none}
+.section.active{display:block}
+
+/* ── Page Header ───────────────────────────────────────────── */
+.page-header{margin-bottom:24px}
+.page-header h2{font-size:22px;font-weight:700;color:var(--text)}
+.page-header .subtitle{font-size:13px;color:var(--text-dim);margin-top:2px}
+.header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.header-actions{display:flex;gap:8px;align-items:center}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;
+  font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface);
+  color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{border-color:#cbd5e1;background:var(--surface2)}
+.btn svg{width:14px;height:14px}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-danger{background:var(--red);color:#fff;border-color:var(--red)}
+.btn-danger:hover{background:#dc2626;border-color:#dc2626}
+
+/* ── KPI Cards ─────────────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.kpi-card{background:var(--surface);border-radius:10px;padding:20px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);border-top:3px solid var(--accent);position:relative}
+.kpi-card.blue{border-top-color:var(--accent)}
+.kpi-card.red{border-top-color:var(--red)}
+.kpi-card.orange{border-top-color:var(--orange)}
+.kpi-card.green{border-top-color:var(--green)}
+.kpi-card.purple{border-top-color:var(--purple)}
+.kpi-card.yellow{border-top-color:var(--yellow)}
+.kpi-card .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:600}
+.kpi-card .kpi-value{font-size:26px;font-weight:700;margin-top:6px;line-height:1.1}
+.kpi-card .kpi-sub{font-size:11px;color:var(--text-dim);margin-top:4px}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.card{background:var(--surface);border-radius:10px;padding:24px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:20px}
+.card h3{font-size:15px;font-weight:700;margin-bottom:16px}
+
+/* ── Tables ────────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 12px;text-align:left;font-size:13px;border-bottom:1px solid var(--border)}
+th{background:var(--surface2);font-weight:600;color:var(--text-dim);font-size:11px;
+  text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+tbody tr:nth-child(even){background:var(--surface2)}
+tbody tr:hover{background:#eef2ff}
+.text-right{text-align:right}
+
+/* ── Chart Containers ──────────────────────────────────────── */
+.chart-container{position:relative;width:100%}
+.chart-container.medium{height:300px}
+.chart-container.large{height:400px}
+
+/* ── Grid Layouts ──────────────────────────────────────────── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:20px}
+
+/* ── Filter Bar ────────────────────────────────────────────── */
+.filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+.filter-bar input,.filter-bar select{padding:8px 12px;border:1px solid var(--border);
+  border-radius:6px;font-size:13px;background:var(--surface);color:var(--text);outline:none;
+  transition:border-color .15s}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--accent)}
+.filter-bar input{min-width:220px}
+
+/* ── Severity Badges ───────────────────────────────────────── */
+.severity{display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:600}
+.severity.dead{background:rgba(239,68,68,.1);color:var(--red)}
+.severity.dormant{background:rgba(245,158,11,.1);color:var(--orange)}
+.severity.non-moving{background:rgba(234,179,8,.1);color:var(--yellow)}
+.severity.slow{background:rgba(34,197,94,.1);color:var(--green)}
+
+/* ── Toast Notification ────────────────────────────────────── */
+.toast{position:fixed;bottom:24px;right:24px;padding:14px 24px;border-radius:8px;
+  font-size:13px;font-weight:500;color:#fff;z-index:9999;transform:translateY(100px);
+  opacity:0;transition:all .3s ease;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+
+/* ── Refresh Spin ──────────────────────────────────────────── */
+@keyframes refresh-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.btn.refreshing svg{animation:refresh-spin .8s linear infinite}
+
+/* ── Last Updated ──────────────────────────────────────────── */
+.last-updated{font-size:11px;color:var(--text-dim)}
+
+/* ── Recommendation Cards ──────────────────────────────────── */
+.rec-card{background:var(--surface);border-radius:10px;padding:20px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px}
+.rec-tag{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;
+  padding:2px 8px;border-radius:4px;letter-spacing:.4px}
+.rec-tag.critical{background:rgba(239,68,68,.1);color:var(--red)}
+.rec-tag.high{background:rgba(245,158,11,.1);color:var(--orange)}
+.rec-tag.medium{background:rgba(37,99,235,.1);color:var(--accent)}
+
+/* ── Progress Bar ──────────────────────────────────────────── */
+.progress-bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;display:flex}
+.progress-bar .bar-segment{height:100%;transition:width .3s}
+
+/* ── Tab Component ─────────────────────────────────────────── */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
+.tab-btn{padding:10px 20px;cursor:pointer;border:none;background:none;font-size:13px;
+  color:var(--text-dim);border-bottom:2px solid transparent;transition:all .15s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* ── Phase Cards ───────────────────────────────────────────── */
+.phase-card{border-left:4px solid var(--border);padding:24px;margin-bottom:16px;
+  background:var(--surface);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.phase-card.phase-1{border-left-color:var(--red)}
+.phase-card.phase-2{border-left-color:var(--orange)}
+.phase-card.phase-3{border-left-color:var(--accent)}
+.phase-header{display:flex;justify-content:space-between;align-items:center}
+.phase-number{font-size:12px;text-transform:uppercase;font-weight:700;letter-spacing:.5px;
+  padding:2px 8px;border-radius:4px;background:var(--surface2)}
+.phase-timeline{font-size:12px;color:var(--text-dim)}
+.phase-card h3{margin:12px 0 8px;font-size:16px}
+.phase-card p{font-size:13px;color:var(--text-dim)}
+
+/* ── Action Items ──────────────────────────────────────────── */
+.action-list{list-style:none}
+.action-item{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:flex-start}
+.action-item:last-child{border-bottom:none}
+.action-meta{font-size:11px;color:var(--text-dim)}
+.action-impact{font-weight:600}
+
+/* ── Priority Tags ─────────────────────────────────────────── */
+.priority-tag{font-size:10px;text-transform:uppercase;padding:2px 8px;border-radius:4px;
+  font-weight:600;letter-spacing:.4px;display:inline-block}
+.priority-tag.critical{background:rgba(239,68,68,.1);color:var(--red)}
+.priority-tag.high{background:rgba(245,158,11,.1);color:var(--orange)}
+.priority-tag.medium{background:rgba(37,99,235,.1);color:var(--accent)}
+
+/* ── Pagination ────────────────────────────────────────────── */
+.pagination{display:flex;justify-content:center;gap:4px;margin-top:16px;align-items:center}
+.page-btn{padding:6px 12px;border:1px solid var(--border);border-radius:4px;cursor:pointer;
+  font-size:12px;background:var(--surface);color:var(--text);transition:all .15s}
+.page-btn:hover{border-color:var(--accent);color:var(--accent)}
+.page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.page-btn:disabled{opacity:.5;cursor:not-allowed}
+.page-info{font-size:12px;color:var(--text-dim);padding:6px 12px}
+
+/* ── Currency Badge ────────────────────────────────────────── */
+.currency-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;
+  font-weight:600;background:var(--surface2);border:1px solid var(--border)}
+
+/* ── Data Banner ───────────────────────────────────────────── */
+.data-banner{padding:20px;text-align:center;background:var(--surface2);border-radius:8px;
+  border:1px dashed var(--border);margin:16px 0}
+.data-banner p{color:var(--text-dim);font-size:13px}
+.data-banner .banner-icon{font-size:24px;margin-bottom:8px}
+
+/* ── Tier Badges ───────────────────────────────────────────── */
+.tier-badge{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:600;text-transform:uppercase}
+.tier-badge.t1{background:rgba(37,99,235,.1);color:var(--accent)}
+.tier-badge.t2{background:rgba(168,85,247,.1);color:var(--purple)}
+
+/* ── Cost Groups & Stats ───────────────────────────────────── */
+.cost-group{margin-bottom:24px}
+.cost-group h4{font-size:14px;margin-bottom:12px}
+.stat-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px}
+.stat-item{font-size:13px}
+.stat-item .stat-label{color:var(--text-dim);font-size:11px}
+.stat-item .stat-value{font-size:20px;font-weight:700}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media(max-width:1100px){.grid-2{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){
+  .sidebar{width:0;overflow:hidden}
+  .main{margin-left:0}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SIDEBAR
+     ═══════════════════════════════════════════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <h1>Firstbase</h1>
+    <p>Aging Inventory Dashboard</p>
+  </div>
+
+  <div class="sidebar-nav">
+    <!-- ANALYTICS -->
+    <div class="nav-section">Analytics</div>
+
+    <a class="nav-link active" data-section="executive">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Executive Summary
+    </a>
+
+    <a class="nav-link" data-section="warehouse">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg>
+      Warehouse Analysis
+    </a>
+
+    <a class="nav-link" data-section="cost">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Cost Analysis
+    </a>
+
+    <a class="nav-link" data-section="customer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Customer Analysis
+    </a>
+
+    <a class="nav-link" data-section="asset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      Asset Profile
+    </a>
+
+    <!-- ACTIONS -->
+    <div class="nav-section">Actions</div>
+
+    <a class="nav-link" data-section="action">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Action Plan
+    </a>
+
+    <!-- DATA -->
+    <div class="nav-section">Data</div>
+
+    <a class="nav-link" data-section="data">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Data Explorer
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="api-status">
+      <span class="api-dot" id="apiDot"></span>
+      <span id="apiStatusText">Checking...</span>
+    </div>
+    <div class="last-updated" id="lastUpdated">Last updated: --</div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ═══════════════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 1 : Executive Summary
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-executive" class="section active">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Executive Summary</h2>
+        <p class="subtitle">Key metrics and aging inventory overview</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="refreshData()" id="btnRefresh">
+          <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+        <button class="btn" onclick="exportExecutiveCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="execKpiGrid"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Classification Distribution</h3>
+        <div class="chart-container medium">
+          <canvas id="chartClassDist"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Top 10 Warehouses</h3>
+        <div class="chart-container medium">
+          <canvas id="chartTopWarehouses"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Monthly Storage Costs by Warehouse</h3>
+      <div class="chart-container large">
+        <canvas id="chartCostComparison"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Risk Matrix &mdash; Dead Stock % vs Total Items</h3>
+      <div class="chart-container large">
+        <canvas id="chartRiskBubble"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 2 : Warehouse Analysis
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-warehouse" class="section">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Warehouse Analysis</h2>
+        <p class="subtitle">Detailed breakdown by warehouse location and tier</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="exportWarehouseCSV()">Export CSV</button>
+        <button class="btn btn-primary" onclick="exportWarehouseExcel()">Export Excel</button>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" id="whSearch" placeholder="Search warehouses...">
+      <select id="whSort">
+        <option value="total-desc">Total Items (High to Low)</option>
+        <option value="total-asc">Total Items (Low to High)</option>
+        <option value="dead-desc">Dead Stock (High to Low)</option>
+        <option value="name-asc">Name (A-Z)</option>
+        <option value="risk-desc">Risk Score (High to Low)</option>
+      </select>
+      <select id="whRegion">
+        <option value="">All Regions</option>
+      </select>
+      <select id="whTier">
+        <option value="">All Tiers</option>
+        <option value="Tier 1">Tier 1</option>
+        <option value="Tier 2">Tier 2</option>
+        <option value="Unknown">Unknown</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap" id="warehouseTable">
+        <table>
+          <thead>
+            <tr>
+              <th>Warehouse</th>
+              <th class="text-right">Dead Stock</th>
+              <th class="text-right">Dormant</th>
+              <th class="text-right">Non-Moving</th>
+              <th class="text-right">Slow Moving</th>
+              <th class="text-right">Total</th>
+              <th>Composition</th>
+              <th class="text-right">Risk Score</th>
+              <th class="text-right">Monthly Cost</th>
+              <th>Currency</th>
+            </tr>
+          </thead>
+          <tbody id="warehouseTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Regional Distribution</h3>
+        <div class="chart-container medium">
+          <canvas id="chartRegional"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Classification per Region</h3>
+        <div class="chart-container medium">
+          <canvas id="chartRegionClass"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 3 : Cost Analysis
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-cost" class="section">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Cost Analysis</h2>
+        <p class="subtitle">Tier 1 and Tier 2 monthly storage costs</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="exportCostCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-cost-tab="tier1">Tier 1 (Geodis)</button>
+      <button class="tab-btn" data-cost-tab="tier2">Tier 2</button>
+      <button class="tab-btn" data-cost-tab="combined">Combined Overview</button>
+    </div>
+
+    <!-- Tier 1 (Geodis) Tab -->
+    <div id="costTab-tier1" class="tab-panel active">
+      <div class="kpi-grid" id="tier1KpiGrid"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Geodis Costs by Classification</h3>
+          <div class="chart-container medium">
+            <canvas id="chartGeodisCostClass"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Geodis Costs by Condition</h3>
+          <div class="chart-container medium">
+            <canvas id="chartGeodisCondition"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Geodis Warehouse Cost Breakdown</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th class="text-right">Dead Stock</th>
+                <th class="text-right">Dormant</th>
+                <th class="text-right">Non-Moving</th>
+                <th class="text-right">Slow Moving</th>
+                <th class="text-right">Total Items</th>
+                <th class="text-right">Monthly Cost</th>
+                <th class="text-right">Annual Cost</th>
+                <th>Currency</th>
+              </tr>
+            </thead>
+            <tbody id="geodisTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Savings Scenarios</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>Description</th>
+                <th class="text-right">Items Affected</th>
+                <th class="text-right">Monthly Savings</th>
+                <th class="text-right">Annual Savings</th>
+                <th>Currency</th>
+              </tr>
+            </thead>
+            <tbody id="savingsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tier 2 Tab -->
+    <div id="costTab-tier2" class="tab-panel">
+      <div class="kpi-grid" id="tier2KpiGrid"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Top Tier 2 Warehouses by Cost</h3>
+          <div class="chart-container medium">
+            <canvas id="chartTier2Top"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Tier 2 Classification Distribution</h3>
+          <div class="chart-container medium">
+            <canvas id="chartTier2ClassDist"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Tier 2 Cost Breakdown</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Classification</th>
+                <th class="text-right">Items</th>
+                <th class="text-right">Storage Cost</th>
+                <th class="text-right">Annual Cost</th>
+                <th>Currency</th>
+              </tr>
+            </thead>
+            <tbody id="tier2CostTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>3PL Provider Summary</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th class="text-right">Total Items</th>
+                <th class="text-right">Warehouses</th>
+                <th class="text-right">Avg Cost/Item</th>
+              </tr>
+            </thead>
+            <tbody id="tier2PlTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Combined Overview Tab -->
+    <div id="costTab-combined" class="tab-panel">
+      <div class="card">
+        <h3>Combined Cost Overview</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Tier</th>
+                <th class="text-right">Total Items</th>
+                <th class="text-right">Monthly Cost</th>
+                <th>Currency</th>
+                <th class="text-right">Annual Cost</th>
+              </tr>
+            </thead>
+            <tbody id="combinedCostTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Per-Currency Totals</h3>
+        <div id="currencyTotals"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 4 : Customer Analysis
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-customer" class="section">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Customer Analysis</h2>
+        <p class="subtitle">Aging inventory breakdown by customer account</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="exportCustomerCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="data-banner" id="customerBanner" style="display:none">
+      <div class="banner-icon">&#128279;</div>
+      <p>Connect to Google Sheets API for customer-level analysis</p>
+    </div>
+
+    <div class="kpi-grid" id="customerKpiGrid"></div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Top 16 Customers by Aging Items</h3>
+        <div class="chart-container medium">
+          <canvas id="chartTopCustomers"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Customer Classification Breakdown</h3>
+        <div class="chart-container medium">
+          <canvas id="chartCustomerClass"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Customer Detail</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th class="text-right">Total</th>
+              <th class="text-right">Dead Stock</th>
+              <th class="text-right">Dormant</th>
+              <th class="text-right">Non-Moving</th>
+              <th class="text-right">Slow Moving</th>
+              <th class="text-right">Warehouses</th>
+              <th>Primary Category</th>
+            </tr>
+          </thead>
+          <tbody id="customerTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 5 : Asset Profile
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-asset" class="section">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Asset Profile</h2>
+        <p class="subtitle">Product categories and item condition analysis</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="exportAssetCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="data-banner" id="assetBanner" style="display:none">
+      <div class="banner-icon">&#128230;</div>
+      <p>Upload asset data for detailed product and condition analysis</p>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-asset-tab="categories">Product Categories</button>
+      <button class="tab-btn" data-asset-tab="conditions">Item Conditions</button>
+    </div>
+
+    <!-- Product Categories Tab -->
+    <div id="assetTab-categories" class="tab-panel active">
+      <div class="kpi-grid" id="categoryCostKpiGrid"></div>
+      <div class="card">
+        <h3>Category Breakdown</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th class="text-right">Dead Stock</th>
+                <th class="text-right">Dormant</th>
+                <th class="text-right">Non-Moving</th>
+                <th class="text-right">Slow Moving</th>
+                <th class="text-right">Total</th>
+                <th class="text-right">% of Total</th>
+                <th class="text-right">Monthly Cost (Tier 2)</th>
+                <th class="text-right">Annual Cost (Tier 2)</th>
+              </tr>
+            </thead>
+            <tbody id="categoryTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Top Categories</h3>
+        <div class="chart-container large">
+          <canvas id="chartTopCategories"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item Conditions Tab -->
+    <div id="assetTab-conditions" class="tab-panel">
+      <div id="conditionSummary"></div>
+
+      <div class="card">
+        <h3>Condition Breakdown</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Condition</th>
+                <th class="text-right">Items</th>
+                <th class="text-right">% of Total</th>
+                <th class="text-right">Dead Stock</th>
+                <th class="text-right">Dormant</th>
+                <th class="text-right">Non-Moving</th>
+                <th class="text-right">Slow Moving</th>
+                <th class="text-right">Monthly Cost (Tier 2)</th>
+                <th class="text-right">Annual Cost (Tier 2)</th>
+              </tr>
+            </thead>
+            <tbody id="conditionTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Condition Distribution</h3>
+          <div class="chart-container medium">
+            <canvas id="chartConditionDist"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Deploy Status</h3>
+          <div class="chart-container medium">
+            <canvas id="chartDeployStatus"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 6 : Action Plan
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-action" class="section">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Action Plan</h2>
+        <p class="subtitle">Safe cost-reduction strategy &mdash; protecting operational inventory</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="exportActionPlanCSV()">Export CSV</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="actionKpiGrid"></div>
+
+    <div id="phase1Content"></div>
+    <div id="phase2Content"></div>
+    <div id="phase3Content"></div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────
+       SECTION 7 : Data Explorer
+       ───────────────────────────────────────────────────────── -->
+  <div id="sec-data" class="section">
+    <div class="header-row">
+      <div class="page-header">
+        <h2>Data Explorer</h2>
+        <p class="subtitle">Browse and export raw data across all sources</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="exportAllDataCSV()">Export All</button>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-data-tab="de-summary">Summary</button>
+      <button class="tab-btn" data-data-tab="de-geodis">Geodis Costs</button>
+      <button class="tab-btn" data-data-tab="de-tier2sum">Tier 2 Summary</button>
+      <button class="tab-btn" data-data-tab="de-tier2detail">Tier 2 Detail</button>
+      <button class="tab-btn" data-data-tab="de-fullreport">Full Report</button>
+    </div>
+
+    <!-- Summary Tab -->
+    <div id="dataTab-de-summary" class="tab-panel active">
+      <div class="filter-bar">
+        <input type="text" id="deSummarySearch" placeholder="Search...">
+        <select id="deSummaryClass">
+          <option value="">All Classifications</option>
+          <option value="Dead Stock">Dead Stock</option>
+          <option value="Dormant">Dormant</option>
+          <option value="Non-Moving">Non-Moving</option>
+          <option value="Slow Moving">Slow Moving</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Classification</th>
+                <th class="text-right">Total Items</th>
+                <th>Report Date</th>
+              </tr>
+            </thead>
+            <tbody id="deSummaryTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="deSummaryPagination"></div>
+      </div>
+    </div>
+
+    <!-- Geodis Costs Tab -->
+    <div id="dataTab-de-geodis" class="tab-panel">
+      <div class="filter-bar">
+        <input type="text" id="deGeodisSearch" placeholder="Search...">
+        <select id="deGeodisClass">
+          <option value="">All Classifications</option>
+          <option value="Dead Stock">Dead Stock</option>
+          <option value="Dormant">Dormant</option>
+          <option value="Non-Moving">Non-Moving</option>
+          <option value="Slow Moving">Slow Moving</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Classification</th>
+                <th class="text-right">Items</th>
+                <th class="text-right">Pallet Cost</th>
+                <th class="text-right">Monthly Cost</th>
+                <th>Condition</th>
+                <th>Currency</th>
+              </tr>
+            </thead>
+            <tbody id="deGeodisTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="deGeodisPagination"></div>
+      </div>
+    </div>
+
+    <!-- Tier 2 Summary Tab -->
+    <div id="dataTab-de-tier2sum" class="tab-panel">
+      <div class="filter-bar">
+        <input type="text" id="deTier2SumSearch" placeholder="Search...">
+        <select id="deTier2SumClass">
+          <option value="">All Classifications</option>
+          <option value="Dead Stock">Dead Stock</option>
+          <option value="Dormant">Dormant</option>
+          <option value="Non-Moving">Non-Moving</option>
+          <option value="Slow Moving">Slow Moving</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Classification</th>
+                <th class="text-right">Storage Cost</th>
+                <th class="text-right">Items</th>
+                <th>Currency</th>
+              </tr>
+            </thead>
+            <tbody id="deTier2SumTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="deTier2SumPagination"></div>
+      </div>
+    </div>
+
+    <!-- Tier 2 Detail Tab -->
+    <div id="dataTab-de-tier2detail" class="tab-panel">
+      <div class="filter-bar">
+        <input type="text" id="deTier2DetailSearch" placeholder="Search...">
+        <select id="deTier2DetailClass">
+          <option value="">All Classifications</option>
+          <option value="Dead Stock">Dead Stock</option>
+          <option value="Dormant">Dormant</option>
+          <option value="Non-Moving">Non-Moving</option>
+          <option value="Slow Moving">Slow Moving</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Customer</th>
+                <th>Description</th>
+                <th>Condition</th>
+                <th>Category</th>
+                <th>Classification</th>
+                <th>3PL</th>
+                <th>Currency</th>
+                <th class="text-right">Cost</th>
+              </tr>
+            </thead>
+            <tbody id="deTier2DetailTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="deTier2DetailPagination"></div>
+      </div>
+    </div>
+
+    <!-- Full Report Tab -->
+    <div id="dataTab-de-fullreport" class="tab-panel">
+      <div class="filter-bar">
+        <input type="text" id="deFullSearch" placeholder="Search...">
+        <select id="deFullClass">
+          <option value="">All Classifications</option>
+          <option value="Dead Stock">Dead Stock</option>
+          <option value="Dormant">Dormant</option>
+          <option value="Non-Moving">Non-Moving</option>
+          <option value="Slow Moving">Slow Moving</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Warehouse</th>
+                <th>Customer</th>
+                <th>Description</th>
+                <th>Condition</th>
+                <th>Category</th>
+                <th>Classification</th>
+                <th>Deploy Status</th>
+              </tr>
+            </thead>
+            <tbody id="deFullTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="deFullPagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notification container -->
+  <div class="toast" id="toast"></div>
+
+</div><!-- /main -->
+<script>
+// ============================================================================
+// PART 2: JavaScript Configuration, Data, Helpers & Indexes
+// Aging Inventory Dashboard
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// 1. API CONFIGURATION
+// ----------------------------------------------------------------------------
+const API_KEY = 'AIzaSyCl_UHrQIOUwbH_g8b6DwMIGoSA9NVpqmE';
+const SHEET_ID = '1ipRekojXkCh0Z7afQ2x3nXYCH49yMlI7wM3Seg-Z8Po';
+const RANGES = [
+  'Aging Inventory Summary!A:D',
+  'Geodis Estimated Monthly Storage Cost!A:G',
+  'Tier 2 Estimated Monthly Storage Cost!A:D',
+  'Tier 2 Costing!A:S',
+  'Full Report!A:P'
+];
+
+// ----------------------------------------------------------------------------
+// 2. STATIC FALLBACK DATA
+// ----------------------------------------------------------------------------
+
+// --- Summary: 73 rows (warehouse / classification / items / date) ---
+const STATIC_SUMMARY = [
+  {warehouse:"Warehouse - Argentina",classification:"Dormant",items:4,date:"2026-05-04"},
+  {warehouse:"Warehouse - Argentina",classification:"Non-Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Argentina",classification:"Slow Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Auckland NZL",classification:"Slow Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Australia",classification:"Dormant",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Bengaluru IN",classification:"Dead Stock",items:2,date:"2026-05-04"},
+  {warehouse:"Warehouse - Bengaluru IN",classification:"Dormant",items:11,date:"2026-05-04"},
+  {warehouse:"Warehouse - Bengaluru IN",classification:"Slow Moving",items:4,date:"2026-05-04"},
+  {warehouse:"Warehouse - Bogota COL",classification:"Dead Stock",items:6,date:"2026-05-04"},
+  {warehouse:"Warehouse - Bogota COL",classification:"Dormant",items:2,date:"2026-05-04"},
+  {warehouse:"Warehouse - Bogota COL",classification:"Slow Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Brazil",classification:"Dead Stock",items:153,date:"2026-05-04"},
+  {warehouse:"Warehouse - Brazil",classification:"Dormant",items:64,date:"2026-05-04"},
+  {warehouse:"Warehouse - Brazil",classification:"Non-Moving",items:6,date:"2026-05-04"},
+  {warehouse:"Warehouse - Brazil",classification:"Slow Moving",items:11,date:"2026-05-04"},
+  {warehouse:"Warehouse - Chennai",classification:"Dead Stock",items:82,date:"2026-05-04"},
+  {warehouse:"Warehouse - Chennai",classification:"Dormant",items:165,date:"2026-05-04"},
+  {warehouse:"Warehouse - Chennai",classification:"Non-Moving",items:174,date:"2026-05-04"},
+  {warehouse:"Warehouse - Chennai",classification:"Slow Moving",items:23,date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Dead Stock",items:721,date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Dormant",items:1019,date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Non-Moving",items:220,date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Slow Moving",items:89,date:"2026-05-04"},
+  {warehouse:"Warehouse - Dubai UAE",classification:"Dormant",items:5,date:"2026-05-04"},
+  {warehouse:"Warehouse - Dubai UAE",classification:"Slow Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - EU",classification:"Dormant",items:8,date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Dead Stock",items:1585,date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Dormant",items:1097,date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Non-Moving",items:90,date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Slow Moving",items:84,date:"2026-05-04"},
+  {warehouse:"Warehouse - Germay Export",classification:"Dead Stock",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Israel",classification:"Dead Stock",items:3,date:"2026-05-04"},
+  {warehouse:"Warehouse - Israel",classification:"Dormant",items:64,date:"2026-05-04"},
+  {warehouse:"Warehouse - Israel",classification:"Non-Moving",items:9,date:"2026-05-04"},
+  {warehouse:"Warehouse - Israel",classification:"Slow Moving",items:7,date:"2026-05-04"},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Dead Stock",items:41,date:"2026-05-04"},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Dormant",items:7,date:"2026-05-04"},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Non-Moving",items:19,date:"2026-05-04"},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Slow Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Manila",classification:"Dead Stock",items:9,date:"2026-05-04"},
+  {warehouse:"Warehouse - Manila",classification:"Dormant",items:26,date:"2026-05-04"},
+  {warehouse:"Warehouse - Manila",classification:"Non-Moving",items:3,date:"2026-05-04"},
+  {warehouse:"Warehouse - Manila",classification:"Slow Moving",items:2,date:"2026-05-04"},
+  {warehouse:"Warehouse - Mexico",classification:"Dead Stock",items:12,date:"2026-05-04"},
+  {warehouse:"Warehouse - Mexico",classification:"Dormant",items:13,date:"2026-05-04"},
+  {warehouse:"Warehouse - Mexico",classification:"Slow Moving",items:4,date:"2026-05-04"},
+  {warehouse:"Warehouse - Montreal",classification:"Dead Stock",items:138,date:"2026-05-04"},
+  {warehouse:"Warehouse - Montreal",classification:"Dormant",items:215,date:"2026-05-04"},
+  {warehouse:"Warehouse - Montreal",classification:"Non-Moving",items:18,date:"2026-05-04"},
+  {warehouse:"Warehouse - Montreal",classification:"Slow Moving",items:7,date:"2026-05-04"},
+  {warehouse:"Warehouse - Oshawa CAN",classification:"Dead Stock",items:153,date:"2026-05-04"},
+  {warehouse:"Warehouse - Oshawa CAN",classification:"Dormant",items:185,date:"2026-05-04"},
+  {warehouse:"Warehouse - Oshawa CAN",classification:"Non-Moving",items:19,date:"2026-05-04"},
+  {warehouse:"Warehouse - Oshawa CAN",classification:"Slow Moving",items:37,date:"2026-05-04"},
+  {warehouse:"Warehouse - San Jose CR",classification:"Dormant",items:3,date:"2026-05-04"},
+  {warehouse:"Warehouse - San Jose CR",classification:"Slow Moving",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Seoul KOR",classification:"Dead Stock",items:4,date:"2026-05-04"},
+  {warehouse:"Warehouse - Seoul KOR",classification:"Dormant",items:1,date:"2026-05-04"},
+  {warehouse:"Warehouse - Seoul KOR",classification:"Slow Moving",items:5,date:"2026-05-04"},
+  {warehouse:"Warehouse - Singapore",classification:"Dead Stock",items:206,date:"2026-05-04"},
+  {warehouse:"Warehouse - Singapore",classification:"Dormant",items:51,date:"2026-05-04"},
+  {warehouse:"Warehouse - Singapore",classification:"Non-Moving",items:49,date:"2026-05-04"},
+  {warehouse:"Warehouse - Singapore",classification:"Slow Moving",items:5,date:"2026-05-04"},
+  {warehouse:"Warehouse - Singapore Export",classification:"Dead Stock",items:5,date:"2026-05-04"},
+  {warehouse:"Warehouse - Singapore Export",classification:"Non-Moving",items:3,date:"2026-05-04"},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Dead Stock",items:239,date:"2026-05-04"},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Dormant",items:158,date:"2026-05-04"},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Non-Moving",items:77,date:"2026-05-04"},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Slow Moving",items:21,date:"2026-05-04"},
+  {warehouse:"Warehouse - Tokyo",classification:"Dead Stock",items:106,date:"2026-05-04"},
+  {warehouse:"Warehouse - Tokyo",classification:"Dormant",items:28,date:"2026-05-04"},
+  {warehouse:"Warehouse - Tokyo",classification:"Non-Moving",items:40,date:"2026-05-04"},
+  {warehouse:"Warehouse - Tokyo",classification:"Slow Moving",items:3,date:"2026-05-04"},
+];
+
+// --- Geodis: 15 rows (Tier 1 actual pallet costs by condition) ---
+const STATIC_GEODIS = [
+  {warehouse:"Warehouse - Coventry UK",classification:"Dead Stock",items:662,palletCost:6.97,monthlyCost:231,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Dormant",items:21,palletCost:6.97,monthlyCost:7,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Non-Moving",items:218,palletCost:6.97,monthlyCost:76,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Slow Moving",items:4,palletCost:6.97,monthlyCost:1,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Dead Stock",items:63,palletCost:6.97,monthlyCost:110,condition:"Used",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Dormant",items:1003,palletCost:6.97,monthlyCost:1748,condition:"Used",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Non-Moving",items:3,palletCost:6.97,monthlyCost:5,condition:"Used",date:"2026-05-04"},
+  {warehouse:"Warehouse - Coventry UK",classification:"Slow Moving",items:87,palletCost:6.97,monthlyCost:152,condition:"Used",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Dead Stock",items:1518,palletCost:27.28,monthlyCost:2071,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Dormant",items:82,palletCost:27.28,monthlyCost:112,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Non-Moving",items:90,palletCost:27.28,monthlyCost:123,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Slow Moving",items:5,palletCost:27.28,monthlyCost:7,condition:"New",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Dead Stock",items:101,palletCost:27.28,monthlyCost:689,condition:"Used",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Dormant",items:1063,palletCost:27.28,monthlyCost:7250,condition:"Used",date:"2026-05-04"},
+  {warehouse:"Warehouse - Germany EU",classification:"Slow Moving",items:82,palletCost:27.28,monthlyCost:559,condition:"Used",date:"2026-05-04"},
+];
+
+// --- Tier 2 Summary: 54 rows (aggregated cost per warehouse x classification) ---
+const STATIC_TIER2_SUMMARY = [
+  {warehouse:"Warehouse - Argentina",classification:"Slow Moving",cost:13,items:1},
+  {warehouse:"Warehouse - Argentina",classification:"Dormant",cost:51,items:4},
+  {warehouse:"Warehouse - Argentina",classification:"Non-Moving",cost:13,items:1},
+  {warehouse:"Warehouse - Auckland NZL",classification:"Slow Moving",cost:6,items:1},
+  {warehouse:"Warehouse - Australia",classification:"Dormant",cost:15,items:1},
+  {warehouse:"Warehouse - Bogota COL",classification:"Dormant",cost:34,items:2},
+  {warehouse:"Warehouse - Bogota COL",classification:"Slow Moving",cost:17,items:1},
+  {warehouse:"Warehouse - Bogota COL",classification:"Dead Stock",cost:102,items:6},
+  {warehouse:"Warehouse - Brazil",classification:"Dormant",cost:1550,items:65},
+  {warehouse:"Warehouse - Brazil",classification:"Slow Moving",cost:255,items:10},
+  {warehouse:"Warehouse - Brazil",classification:"Dead Stock",cost:3182,items:153},
+  {warehouse:"Warehouse - Brazil",classification:"Non-Moving",cost:153,items:6},
+  {warehouse:"Warehouse - Chennai",classification:"Dormant",cost:492,items:166},
+  {warehouse:"Warehouse - Chennai",classification:"Slow Moving",cost:75,items:23},
+  {warehouse:"Warehouse - Chennai",classification:"Dead Stock",cost:195,items:137},
+  {warehouse:"Warehouse - Chennai",classification:"Non-Moving",cost:174,items:119},
+  {warehouse:"Warehouse - Dubai UAE",classification:"Dormant",cost:55,items:5},
+  {warehouse:"Warehouse - Dubai UAE",classification:"Slow Moving",cost:11,items:1},
+  {warehouse:"Warehouse - Israel",classification:"Dormant",cost:630,items:63},
+  {warehouse:"Warehouse - Israel",classification:"Slow Moving",cost:70,items:7},
+  {warehouse:"Warehouse - Israel",classification:"Dead Stock",cost:30,items:3},
+  {warehouse:"Warehouse - Israel",classification:"Non-Moving",cost:90,items:9},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Slow Moving",cost:2,items:1},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Dormant",cost:11,items:7},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Dead Stock",cost:66,items:41},
+  {warehouse:"Warehouse - Kuala Lumpur MYS",classification:"Non-Moving",cost:37,items:23},
+  {warehouse:"Warehouse - Manila",classification:"Dormant",cost:130,items:26},
+  {warehouse:"Warehouse - Manila",classification:"Slow Moving",cost:10,items:2},
+  {warehouse:"Warehouse - Manila",classification:"Dead Stock",cost:45,items:9},
+  {warehouse:"Warehouse - Manila",classification:"Non-Moving",cost:15,items:3},
+  {warehouse:"Warehouse - Mexico",classification:"Dormant",cost:166,items:13},
+  {warehouse:"Warehouse - Mexico",classification:"Slow Moving",cost:51,items:4},
+  {warehouse:"Warehouse - Mexico",classification:"Dead Stock",cost:153,items:12},
+  {warehouse:"Warehouse - Montreal",classification:"Dormant",cost:2150,items:215},
+  {warehouse:"Warehouse - Montreal",classification:"Slow Moving",cost:80,items:8},
+  {warehouse:"Warehouse - Montreal",classification:"Non-Moving",cost:150,items:15},
+  {warehouse:"Warehouse - Montreal",classification:"Dead Stock",cost:1410,items:141},
+  {warehouse:"Warehouse - San Jose CR",classification:"Slow Moving",cost:26,items:1},
+  {warehouse:"Warehouse - San Jose CR",classification:"Dormant",cost:78,items:3},
+  {warehouse:"Warehouse - Seoul KOR",classification:"Dormant",cost:20,items:1},
+  {warehouse:"Warehouse - Seoul KOR",classification:"Slow Moving",cost:100,items:5},
+  {warehouse:"Warehouse - Seoul KOR",classification:"Dead Stock",cost:80,items:4},
+  {warehouse:"Warehouse - Singapore",classification:"Slow Moving",cost:50,items:5},
+  {warehouse:"Warehouse - Singapore",classification:"Dormant",cost:510,items:51},
+  {warehouse:"Warehouse - Singapore",classification:"Dead Stock",cost:2080,items:208},
+  {warehouse:"Warehouse - Singapore",classification:"Non-Moving",cost:480,items:48},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Dormant",cost:4740,items:158},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Slow Moving",cost:690,items:23},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Dead Stock",cost:7230,items:241},
+  {warehouse:"Warehouse - Sydney AUS",classification:"Non-Moving",cost:2640,items:88},
+  {warehouse:"Warehouse - Tokyo",classification:"Dormant",cost:168,items:28},
+  {warehouse:"Warehouse - Tokyo",classification:"Slow Moving",cost:18,items:3},
+  {warehouse:"Warehouse - Tokyo",classification:"Dead Stock",cost:356,items:112},
+  {warehouse:"Warehouse - Tokyo",classification:"Non-Moving",cost:164,items:34},
+];
+
+// ----------------------------------------------------------------------------
+// 3. WAREHOUSE METADATA
+//    Maps warehouse name -> {tier, region, currency, tpl}
+//    tier: 1 = Geodis (actual pallet costs), 2 = Tier 2 (estimated), 0 = no cost data
+// ----------------------------------------------------------------------------
+const WAREHOUSE_META = {
+  'Warehouse - Coventry UK':       {tier:1, region:'EMEA',     currency:'GBP', tpl:'Geodis'},
+  'Warehouse - Germany EU':        {tier:1, region:'EMEA',     currency:'EUR', tpl:'Geodis'},
+  'Warehouse - Sydney AUS':        {tier:2, region:'APAC',     currency:'AUD', tpl:'VPS'},
+  'Warehouse - Auckland NZL':      {tier:2, region:'APAC',     currency:'NZD', tpl:'Unknown'},
+  'Warehouse - Kuala Lumpur MYS':  {tier:2, region:'APAC',     currency:'MYR', tpl:'Unknown'},
+  'Warehouse - Montreal':          {tier:2, region:'Americas', currency:'USD', tpl:'TL'},
+  'Warehouse - Chennai':           {tier:2, region:'APAC',     currency:'USD', tpl:'TL'},
+  'Warehouse - Tokyo':             {tier:2, region:'APAC',     currency:'USD', tpl:'SystemsGo'},
+  'Warehouse - Israel':            {tier:2, region:'EMEA',     currency:'USD', tpl:'TL'},
+  'Warehouse - Brazil':            {tier:2, region:'Americas', currency:'USD', tpl:'Nudos'},
+  'Warehouse - Singapore':         {tier:2, region:'APAC',     currency:'USD', tpl:'TL'},
+  'Warehouse - Seoul KOR':         {tier:2, region:'APAC',     currency:'USD', tpl:'CompuTech'},
+  'Warehouse - Argentina':         {tier:2, region:'Americas', currency:'USD', tpl:'Unknown'},
+  'Warehouse - Bogota COL':        {tier:2, region:'Americas', currency:'USD', tpl:'Unknown'},
+  'Warehouse - Manila':            {tier:2, region:'APAC',     currency:'USD', tpl:'Unknown'},
+  'Warehouse - Mexico':            {tier:2, region:'Americas', currency:'USD', tpl:'Unknown'},
+  'Warehouse - Dubai UAE':         {tier:2, region:'EMEA',     currency:'USD', tpl:'Unknown'},
+  'Warehouse - San Jose CR':       {tier:2, region:'Americas', currency:'USD', tpl:'Unknown'},
+  'Warehouse - Australia':         {tier:2, region:'APAC',     currency:'AUD', tpl:'Unknown'},
+  'Warehouse - Bengaluru IN':      {tier:0, region:'APAC',     currency:'USD', tpl:'Unknown'},
+  'Warehouse - Oshawa CAN':        {tier:1, region:'Americas', currency:'CAD', tpl:'Geodis'},
+  'Warehouse - EU':                {tier:0, region:'EMEA',     currency:'EUR', tpl:'Unknown'},
+  'Warehouse - Germay Export':     {tier:0, region:'EMEA',     currency:'EUR', tpl:'Unknown'},
+  'Warehouse - Singapore Export':  {tier:0, region:'APAC',     currency:'USD', tpl:'Unknown'},
+};
+
+// ----------------------------------------------------------------------------
+// 4. CURRENCY SYMBOL MAP
+// ----------------------------------------------------------------------------
+const CURRENCY_SYMBOLS = { GBP:'£', EUR:'€', USD:'$', CAD:'C$', AUD:'A$', MYR:'RM', NZD:'NZ$' };
+
+// ----------------------------------------------------------------------------
+// 5. DATA STORES AND STATE
+// ----------------------------------------------------------------------------
+
+// Live data stores (initialised from static fallbacks)
+let SUMMARY_DATA      = [...STATIC_SUMMARY];
+let GEODIS_DATA       = [...STATIC_GEODIS];
+let TIER2_SUMMARY_DATA = [...STATIC_TIER2_SUMMARY];
+let TIER2_DETAIL_DATA  = [];    // populated only from API (Tier 2 Costing sheet)
+let FULL_REPORT_DATA   = [];    // populated only from API (Full Report sheet)
+
+// Connection & loading state
+let apiConnected    = false;
+let hasDetailData   = false;    // true when Tier2 Detail + Full Report are loaded
+let autoRefreshTimer = null;
+
+// Chart.js instance cache (keyed by canvas ID)
+const charts = {};
+
+// Classification colour palette
+const CLASS_COLORS = {
+  'Dead Stock':   '#ef4444',
+  'Dormant':      '#f59e0b',
+  'Non-Moving':   '#eab308',
+  'Slow Moving':  '#22c55e'
+};
+
+// Ordered list of classification names
+const CLASSES = ['Dead Stock', 'Dormant', 'Non-Moving', 'Slow Moving'];
+
+// Pagination
+const PAGE_SIZE = 50;
+const paginationState = {};
+
+// Dirty flags per section (true = needs re-render on next visit)
+const sectionDirty = {
+  executive: true,
+  warehouse: true,
+  cost:      true,
+  customer:  true,
+  asset:     true,
+  action:    true,
+  data:      true
+};
+
+// ----------------------------------------------------------------------------
+// 6. HELPER FUNCTIONS
+// ----------------------------------------------------------------------------
+
+/** Format a number as currency with the appropriate symbol */
+function fmtCurrency(amount, currency) {
+  const sym = CURRENCY_SYMBOLS[currency] || currency + ' ';
+  return sym + amount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+/** Format a number with locale-aware thousand separators */
+function fmtN(n) { return n.toLocaleString(); }
+
+/** Strip the "Warehouse - " prefix for compact display */
+function shortName(n) { return n.replace('Warehouse - ', ''); }
+
+/**
+ * Get metadata for a warehouse. Falls back to region guessing
+ * if the warehouse is not in WAREHOUSE_META.
+ */
+function getWarehouseMeta(name) {
+  if (WAREHOUSE_META[name]) return WAREHOUSE_META[name];
+  // Fallback: guess region from name keywords
+  const n = name.toLowerCase();
+  let region = 'Other';
+  if (/uk|coventry|eu|germany|germay|israel|dubai|uae/.test(n)) region = 'EMEA';
+  else if (/canada|can|montreal|oshawa|brazil|argentina|bogota|col|mexico|san jose|cr/.test(n)) region = 'Americas';
+  else if (/india|in|chennai|bengaluru|singapore|sydney|aus|auckland|nzl|tokyo|manila|kuala|mys|seoul|kor|australia/.test(n)) region = 'APAC';
+  return {tier:0, region, currency:'USD', tpl:'Unknown'};
+}
+
+/** Safely destroy a Chart.js instance by canvas ID */
+function destroyChart(id) {
+  if (charts[id]) {
+    charts[id].destroy();
+    delete charts[id];
+  }
+}
+
+/** Mark all sections as needing re-render (e.g. after data refresh) */
+function markAllDirty() {
+  Object.keys(sectionDirty).forEach(k => sectionDirty[k] = true);
+}
+
+/**
+ * Compute a weighted risk score for a warehouse.
+ * Dead Stock weighs 4x, Dormant 3x, Non-Moving 2x, Slow Moving 1x.
+ */
+function riskScore(wh) {
+  return (wh['Dead Stock']||0)*4 + (wh['Dormant']||0)*3 + (wh['Non-Moving']||0)*2 + (wh['Slow Moving']||0)*1;
+}
+
+/** Human-readable tier label */
+function tierLabel(t) {
+  return t === 1 ? 'Tier 1' : t === 2 ? 'Tier 2' : '\u2014';
+}
+
+/** HTML badge for tier display */
+function tierBadge(t) {
+  if (t === 1) return '<span class="tier-badge t1">T1</span>';
+  if (t === 2) return '<span class="tier-badge t2">T2</span>';
+  return '<span class="tier-badge" style="background:#f1f5f9;color:#94a3b8">\u2014</span>';
+}
+
+/** Create a debounced version of a function */
+function debounce(fn, ms) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+/** Percentage of part relative to total, formatted to 1 decimal place */
+function pctOf(part, total) {
+  return total > 0 ? (part / total * 100).toFixed(1) : '0.0';
+}
+
+// ----------------------------------------------------------------------------
+// 7. PARSE FUNCTIONS (for Google Sheets API responses)
+// ----------------------------------------------------------------------------
+
+/**
+ * Parse rows from the "Aging Inventory Summary" sheet.
+ * Columns: Warehouse | Classification | Total Items | Date
+ */
+function parseSummaryRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const h = rows[0].map(s => s.trim().toLowerCase());
+  const wi = h.findIndex(x => /warehouse/.test(x));
+  const ci = h.findIndex(x => /classif|age|category/.test(x));
+  const ii = h.findIndex(x => /total|items|qty|count/.test(x));
+  const di = h.findIndex(x => /date|generated|report/.test(x));
+  if (wi === -1 || ci === -1 || ii === -1) return [];
+  return rows.slice(1).filter(r => r[wi] && r[ci]).map(r => ({
+    warehouse:      r[wi].trim(),
+    classification: r[ci].trim(),
+    items:          parseInt(r[ii]) || 0,
+    date:           di !== -1 && r[di] ? r[di].split(' ')[0] : '2026-05-04',
+  }));
+}
+
+/**
+ * Parse rows from the "Geodis Estimated Monthly Storage Cost" sheet.
+ * Columns: Warehouse | Classification | Items | Pallet Cost | Monthly Cost | Condition | Date
+ */
+function parseGeodisRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const h = rows[0].map(s => s.trim().toLowerCase());
+  const wi  = h.findIndex(x => /warehouse/.test(x));
+  const ci  = h.findIndex(x => /classif|age/.test(x));
+  const ii  = h.findIndex(x => /total|items/.test(x));
+  const pi  = h.findIndex(x => /pallet/.test(x));
+  const mi  = h.findIndex(x => /monthly/.test(x));
+  const coi = h.findIndex(x => /condition/.test(x));
+  const di  = h.findIndex(x => /date/.test(x));
+  if (wi === -1 || ci === -1) return [];
+  return rows.slice(1).filter(r => r[wi] && r[ci]).map(r => ({
+    warehouse:      r[wi].trim(),
+    classification: r[ci].trim(),
+    items:          parseInt(r[ii]) || 0,
+    palletCost:     parseFloat(r[pi]) || 0,
+    monthlyCost:    parseFloat(r[mi]) || 0,
+    condition:      coi !== -1 && r[coi] ? r[coi].trim() : 'Unknown',
+    date:           di !== -1 && r[di] ? r[di].split(' ')[0] : '2026-05-04',
+  }));
+}
+
+/**
+ * Parse rows from the "Tier 2 Estimated Monthly Storage Cost" sheet.
+ * Columns: Warehouse | Classification | Storage Cost | Items
+ */
+function parseTier2SummaryRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const h = rows[0].map(s => s.trim().toLowerCase());
+  const wi = h.findIndex(x => /warehouse/.test(x));
+  const ci = h.findIndex(x => /classif|age/.test(x));
+  const si = h.findIndex(x => /storage|cost|allocation/.test(x));
+  const ii = h.findIndex(x => /total|items/.test(x));
+  if (wi === -1 || ci === -1) return [];
+  return rows.slice(1).filter(r => r[wi] && r[ci]).map(r => ({
+    warehouse:      r[wi].trim(),
+    classification: r[ci].trim(),
+    cost:           parseFloat(r[si]) || 0,
+    items:          parseInt(r[ii]) || 0,
+  }));
+}
+
+/**
+ * Parse rows from the "Tier 2 Costing" sheet (line-item detail).
+ * Up to 19 columns: Warehouse, Organisation, SKU, Description, Condition,
+ * Category, Vendor, Classification, 3PL, Currency, Storage Cost, etc.
+ */
+function parseTier2DetailRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const h = rows[0].map(s => s.trim().toLowerCase());
+  const wi  = h.findIndex(x => /warehouse/.test(x));
+  const oi  = h.findIndex(x => /organisation|customer/.test(x));
+  const ski = h.findIndex(x => /sku/.test(x));
+  const dsi = h.findIndex(x => /description/.test(x));
+  const cni = h.findIndex(x => /condition/.test(x));
+  const cai = h.findIndex(x => /category/.test(x));
+  const vi  = h.findIndex(x => /vendor/.test(x));
+  const cli = h.findIndex(x => /classif|age/.test(x));
+  const tpi = h.findIndex(x => /3pl/.test(x));
+  const cui = h.findIndex(x => /currency/.test(x));
+  const coi = h.findIndex(x => /storage|cost|allocation/.test(x));
+  if (wi === -1) return [];
+  return rows.slice(1).filter(r => r[wi]).map(r => ({
+    warehouse:      r[wi]?.trim()  || '',
+    customer:       r[oi]?.trim()  || '',
+    sku:            r[ski]?.trim() || '',
+    description:    r[dsi]?.trim() || '',
+    condition:      r[cni]?.trim() || '',
+    category:       r[cai]?.trim() || '',
+    vendor:         r[vi]?.trim()  || '',
+    classification: r[cli]?.trim() || '',
+    tpl:            r[tpi]?.trim() || '',
+    currency:       r[cui]?.trim() || '',
+    cost:           parseFloat(r[coi]) || 0,
+  }));
+}
+
+/**
+ * Parse rows from the "Full Report" sheet (complete asset-level data).
+ * Up to 16 columns: Warehouse, Organisation, SKU, Description,
+ * Deploy Status, Condition, Category, Vendor, Classification, etc.
+ */
+function parseFullReportRows(rows) {
+  if (!rows || rows.length < 2) return [];
+  const h = rows[0].map(s => s.trim().toLowerCase());
+  const wi  = h.findIndex(x => /warehouse/.test(x));
+  const oi  = h.findIndex(x => /organisation|customer/.test(x));
+  const ski = h.findIndex(x => /sku/.test(x));
+  const dsi = h.findIndex(x => /description/.test(x));
+  const dpi = h.findIndex(x => /deploy_status|deploy/.test(x));
+  const cni = h.findIndex(x => /condition/.test(x));
+  const cai = h.findIndex(x => /category/.test(x));
+  const vi  = h.findIndex(x => /vendor/.test(x));
+  const cli = h.findIndex(x => /classif|age/.test(x));
+  if (wi === -1) return [];
+  return rows.slice(1).filter(r => r[wi]).map(r => ({
+    warehouse:      r[wi]?.trim()  || '',
+    customer:       r[oi]?.trim()  || '',
+    sku:            r[ski]?.trim() || '',
+    description:    r[dsi]?.trim() || '',
+    deployStatus:   r[dpi]?.trim() || '',
+    condition:      r[cni]?.trim() || '',
+    category:       r[cai]?.trim() || '',
+    vendor:         r[vi]?.trim()  || '',
+    classification: r[cli]?.trim() || '',
+  }));
+}
+
+// ----------------------------------------------------------------------------
+// 8. INDEX BUILDING FUNCTIONS
+// ----------------------------------------------------------------------------
+
+/**
+ * Build a comprehensive warehouse index combining data from Summary,
+ * Geodis (Tier 1), and Tier 2 sources. Each entry contains item counts
+ * per classification, total items, monthly cost, and cost currency.
+ */
+function buildWarehouseIndex() {
+  const idx = {};
+
+  // From Summary data: aggregate items per classification
+  SUMMARY_DATA.forEach(d => {
+    if (!idx[d.warehouse]) {
+      idx[d.warehouse] = {
+        name: d.warehouse,
+        ...getWarehouseMeta(d.warehouse),
+        'Dead Stock': 0, Dormant: 0, 'Non-Moving': 0, 'Slow Moving': 0,
+        total: 0, monthlyCost: null, costCurrency: null
+      };
+    }
+    idx[d.warehouse][d.classification] = (idx[d.warehouse][d.classification] || 0) + d.items;
+    idx[d.warehouse].total += d.items;
+  });
+
+  // Tier 1 costs from Geodis data
+  const geodisCosts = {};
+  GEODIS_DATA.forEach(d => {
+    if (!geodisCosts[d.warehouse]) geodisCosts[d.warehouse] = 0;
+    geodisCosts[d.warehouse] += d.monthlyCost;
+  });
+  Object.keys(geodisCosts).forEach(wh => {
+    if (idx[wh]) {
+      idx[wh].monthlyCost = geodisCosts[wh];
+      const meta = getWarehouseMeta(wh);
+      idx[wh].costCurrency = meta.currency;
+    }
+  });
+
+  // Tier 2 costs from Tier 2 Summary data (skip Tier 1 warehouses — they use Geodis costs)
+  const t2Costs = {};
+  TIER2_SUMMARY_DATA.forEach(d => {
+    if (!t2Costs[d.warehouse]) t2Costs[d.warehouse] = 0;
+    t2Costs[d.warehouse] += d.cost;
+  });
+  Object.keys(t2Costs).forEach(wh => {
+    if (idx[wh]) {
+      const meta = getWarehouseMeta(wh);
+      // Don't overwrite Tier 1 (Geodis) warehouses with Tier 2 estimates
+      if (meta.tier === 1) return;
+      idx[wh].monthlyCost = t2Costs[wh];
+      idx[wh].costCurrency = meta.currency;
+    }
+  });
+
+  // Update currency from Tier 2 Detail if available (more accurate)
+  if (TIER2_DETAIL_DATA.length > 0) {
+    const whCurrency = {};
+    TIER2_DETAIL_DATA.forEach(d => {
+      if (d.currency && d.warehouse) whCurrency[d.warehouse] = d.currency;
+    });
+    Object.keys(whCurrency).forEach(wh => {
+      if (idx[wh]) idx[wh].costCurrency = whCurrency[wh];
+      // Also update WAREHOUSE_META dynamically
+      if (WAREHOUSE_META[wh]) WAREHOUSE_META[wh].currency = whCurrency[wh];
+    });
+  }
+
+  return idx;
+}
+
+/**
+ * Build a customer index from Full Report data.
+ * Each entry: classification counts, total, warehouse count, category breakdown.
+ * Only available when Full Report data has been loaded from the API.
+ */
+function buildCustomerIndex() {
+  const idx = {};
+  if (FULL_REPORT_DATA.length === 0) return idx;
+  FULL_REPORT_DATA.forEach(d => {
+    if (!d.customer) return;
+    if (!idx[d.customer]) {
+      idx[d.customer] = {
+        name: d.customer,
+        'Dead Stock': 0, Dormant: 0, 'Non-Moving': 0, 'Slow Moving': 0,
+        total: 0, warehouses: new Set(), categories: {}
+      };
+    }
+    idx[d.customer][d.classification] = (idx[d.customer][d.classification] || 0) + 1;
+    idx[d.customer].total += 1;
+    idx[d.customer].warehouses.add(d.warehouse);
+    idx[d.customer].categories[d.category] = (idx[d.customer].categories[d.category] || 0) + 1;
+  });
+  // Convert warehouse Sets to counts for serialisability
+  Object.values(idx).forEach(c => {
+    c.warehouseCount = c.warehouses.size;
+    delete c.warehouses;
+  });
+  return idx;
+}
+
+/**
+ * Build a category (asset type) index from Full Report data.
+ * Each entry: classification counts, total, condition breakdown.
+ */
+function buildCategoryIndex() {
+  const idx = {};
+  if (FULL_REPORT_DATA.length === 0) return idx;
+  FULL_REPORT_DATA.forEach(d => {
+    if (!d.category) return;
+    if (!idx[d.category]) {
+      idx[d.category] = {
+        name: d.category,
+        'Dead Stock': 0, Dormant: 0, 'Non-Moving': 0, 'Slow Moving': 0,
+        total: 0, conditions: {}
+      };
+    }
+    idx[d.category][d.classification] = (idx[d.category][d.classification] || 0) + 1;
+    idx[d.category].total += 1;
+    idx[d.category].conditions[d.condition] = (idx[d.category].conditions[d.condition] || 0) + 1;
+  });
+  return idx;
+}
+
+/**
+ * Build a condition (New / Used / etc.) index from Full Report data.
+ * Each entry: classification counts and total.
+ */
+function buildConditionIndex() {
+  const idx = {};
+  if (FULL_REPORT_DATA.length === 0) return idx;
+  FULL_REPORT_DATA.forEach(d => {
+    if (!d.condition) return;
+    if (!idx[d.condition]) {
+      idx[d.condition] = {
+        name: d.condition,
+        'Dead Stock': 0, Dormant: 0, 'Non-Moving': 0, 'Slow Moving': 0,
+        total: 0
+      };
+    }
+    idx[d.condition][d.classification] = (idx[d.condition][d.classification] || 0) + 1;
+    idx[d.condition].total += 1;
+  });
+  return idx;
+}
+
+/**
+ * Build a deploy status index from Full Report data.
+ * Simple map of status -> count.
+ */
+function buildDeployStatusIndex() {
+  const idx = {};
+  if (FULL_REPORT_DATA.length === 0) return idx;
+  FULL_REPORT_DATA.forEach(d => {
+    const s = d.deployStatus || 'Unknown';
+    idx[s] = (idx[s] || 0) + 1;
+  });
+  return idx;
+}
+
+/**
+ * Aggregate TIER2_DETAIL_DATA costs by category × currency.
+ * Returns: { COMPUTER: { USD: 1234, AUD: 567 }, ... }
+ */
+function buildCategoryCostIndex() {
+  const idx = {};
+  if (TIER2_DETAIL_DATA.length === 0) return idx;
+  TIER2_DETAIL_DATA.forEach(d => {
+    if (!d.category) return;
+    const cur = d.currency || getWarehouseMeta(d.warehouse).currency || 'USD';
+    if (!idx[d.category]) idx[d.category] = {};
+    idx[d.category][cur] = (idx[d.category][cur] || 0) + (d.cost || 0);
+  });
+  return idx;
+}
+
+/**
+ * Aggregate TIER2_DETAIL_DATA costs by condition × currency.
+ * Returns: { NEW: { USD: 1234, AUD: 567 }, ... }
+ */
+function buildConditionCostIndex() {
+  const idx = {};
+  if (TIER2_DETAIL_DATA.length === 0) return idx;
+  TIER2_DETAIL_DATA.forEach(d => {
+    if (!d.condition) return;
+    const cur = d.currency || getWarehouseMeta(d.warehouse).currency || 'USD';
+    if (!idx[d.condition]) idx[d.condition] = {};
+    idx[d.condition][cur] = (idx[d.condition][cur] || 0) + (d.cost || 0);
+  });
+  return idx;
+}
+
+/**
+ * Estimate year-of-manufacture from a product description string.
+ * Returns a 4-digit year (number) or null if unknown.
+ */
+function estimateYOM(description) {
+  if (!description) return null;
+  const desc = description.toUpperCase();
+
+  // 1. Dell Latitude model numbers
+  const dellMatch = desc.match(/LATITUDE\s*(\d{4})/);
+  if (dellMatch) {
+    const model = parseInt(dellMatch[1]);
+    const dellMap = {
+      5500:2019, 5510:2020, 5520:2021, 5530:2022, 5540:2023, 5550:2024,
+      5400:2019, 5410:2020, 5420:2021, 5430:2022, 5440:2023, 5450:2024,
+      5300:2019, 5310:2020, 5320:2021, 5330:2022, 5340:2023,
+      7400:2019, 7410:2020, 7420:2021, 7430:2022, 7440:2023, 7450:2024,
+      7300:2019, 7310:2020, 7320:2021, 7330:2022, 7340:2023,
+      9510:2021, 9520:2022, 9530:2023, 9540:2024,
+      3520:2022, 3540:2023, 3420:2022, 3440:2023,
+      5290:2018, 5490:2018, 5590:2018,
+      5280:2017, 5480:2017, 5580:2017,
+      7490:2018, 7390:2018, 7290:2018,
+      7480:2017, 7380:2017, 7280:2017
+    };
+    if (dellMap[model]) return dellMap[model];
+    // Heuristic: last digit pattern for x5x0 series
+    const lastTwo = model % 100;
+    if (lastTwo === 0) return 2019;
+    if (lastTwo === 10) return 2020;
+    if (lastTwo === 20) return 2021;
+    if (lastTwo === 30) return 2022;
+    if (lastTwo === 40) return 2023;
+    if (lastTwo === 50) return 2024;
+  }
+
+  // 2. ThinkPad models
+  if (/THINKPAD/.test(desc)) {
+    // Gen-based models
+    const genMatch = desc.match(/GEN\s*(\d+)/);
+    if (genMatch) {
+      const gen = parseInt(genMatch[1]);
+      const genMap = {1:2020, 2:2021, 3:2022, 4:2023, 5:2024, 6:2025};
+      if (genMap[gen]) return genMap[gen];
+    }
+    // T-series 3-digit
+    const tMatch = desc.match(/T(\d{3})/);
+    if (tMatch) {
+      const m = parseInt(tMatch[1]);
+      if (m === 480 || m === 580) return 2018;
+      if (m === 490 || m === 590) return 2019;
+      if (m === 495) return 2019;
+      if (m === 470 || m === 570) return 2017;
+      if (m === 460 || m === 560) return 2016;
+    }
+    // X1 Carbon Gen
+    const x1GenMatch = desc.match(/X1\s*CARBON\s*(?:GEN\s*)?(\d+)/);
+    if (x1GenMatch) {
+      const gen = parseInt(x1GenMatch[1]);
+      const x1Map = {7:2019, 8:2020, 9:2021, 10:2022, 11:2023, 12:2024};
+      if (x1Map[gen]) return x1Map[gen];
+    }
+  }
+
+  // 3. HP EliteBook / ProBook models
+  const hpMatch = desc.match(/(ELITEBOOK|PROBOOK)\s*(\d{3})\s*G(\d+)/);
+  if (hpMatch) {
+    const gen = parseInt(hpMatch[3]);
+    const hpGenMap = {5:2018, 6:2019, 7:2020, 8:2021, 9:2022, 10:2023, 11:2024};
+    if (hpGenMap[gen]) return hpGenMap[gen];
+  }
+
+  // 4. MacBook chip generation
+  if (/MACBOOK|MAC\s*BOOK/.test(desc)) {
+    if (/M3\s*(PRO|MAX|ULTRA)?/.test(desc)) return 2023;
+    if (/M2\s*(PRO|MAX|ULTRA)?/.test(desc)) return 2022;
+    if (/M1\s*(PRO|MAX|ULTRA)?/.test(desc)) return 2020;
+    if (/M4/.test(desc)) return 2024;
+  }
+
+  // 5. Intel CPU generation keywords
+  const intelGenMatch = desc.match(/(\d{1,2})(?:TH|RD|ND|ST)\s*GEN/);
+  if (intelGenMatch) {
+    const gen = parseInt(intelGenMatch[1]);
+    const intelMap = {8:2018, 9:2018, 10:2020, 11:2021, 12:2022, 13:2023, 14:2024};
+    if (intelMap[gen]) return intelMap[gen];
+  }
+  // i-series with 4-5 digit model
+  const iMatch = desc.match(/I[3579]-(\d{4,5})/);
+  if (iMatch) {
+    const model = iMatch[1];
+    const firstDigits = model.length === 5 ? parseInt(model.substring(0, 2)) : parseInt(model.substring(0, 1));
+    const cpuGenMap5 = {10:2020, 11:2020, 12:2022, 13:2023, 14:2024};
+    const cpuGenMap4 = {8:2018, 9:2019, 7:2017, 6:2016, 5:2015, 4:2014, 3:2013, 1:2020};
+    if (model.length === 5 && cpuGenMap5[firstDigits]) return cpuGenMap5[firstDigits];
+    if (model.length === 4 && cpuGenMap4[firstDigits]) return cpuGenMap4[firstDigits];
+  }
+
+  // 6. Explicit 4-digit year in description (2013-2026)
+  const yearMatch = desc.match(/\b(20[12]\d)\b/);
+  if (yearMatch) {
+    const yr = parseInt(yearMatch[1]);
+    if (yr >= 2013 && yr <= 2026) return yr;
+  }
+
+  return null;
+}
+
+/**
+ * Build device age index from FULL_REPORT_DATA + TIER2_DETAIL_DATA.
+ * Dedupes by SKU+warehouse+description.
+ * Returns: {
+ *   byYear: { 2020: { count, categories:{} }, ... },
+ *   byCategory: { COMPUTER: { totalAge, count }, ... },
+ *   total, identified
+ * }
+ */
+function buildDeviceAgeIndex() {
+  const currentYear = new Date().getFullYear();
+  const seen = new Set();
+  const items = [];
+
+  // Combine both data sources, deduplicate
+  const allData = [...FULL_REPORT_DATA, ...TIER2_DETAIL_DATA];
+  allData.forEach(d => {
+    const key = (d.sku || '') + '|' + (d.warehouse || '') + '|' + (d.description || '').substring(0, 50);
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push(d);
+  });
+
+  const result = {
+    byYear: {},
+    byCategory: {},
+    total: items.length,
+    identified: 0
+  };
+
+  items.forEach(d => {
+    const yom = estimateYOM(d.description);
+    if (yom === null) return;
+
+    result.identified++;
+    const age = currentYear - yom;
+    const cat = d.category || 'Unknown';
+
+    // By year
+    if (!result.byYear[yom]) result.byYear[yom] = { count: 0, categories: {} };
+    result.byYear[yom].count++;
+    result.byYear[yom].categories[cat] = (result.byYear[yom].categories[cat] || 0) + 1;
+
+    // By category
+    if (!result.byCategory[cat]) result.byCategory[cat] = { totalAge: 0, count: 0 };
+    result.byCategory[cat].totalAge += age;
+    result.byCategory[cat].count++;
+  });
+
+  return result;
+}
+
+// Materialised indexes (rebuilt after each data load/refresh)
+let WAREHOUSE_INDEX     = {};
+let CUSTOMER_INDEX      = {};
+let CATEGORY_INDEX      = {};
+let CONDITION_INDEX     = {};
+let DEPLOY_STATUS_INDEX = {};
+let CATEGORY_COST_INDEX = {};
+let CONDITION_COST_INDEX = {};
+let DEVICE_AGE_INDEX    = {};
+
+/** Rebuild all indexes from current data stores */
+function rebuildIndexes() {
+  WAREHOUSE_INDEX     = buildWarehouseIndex();
+  CUSTOMER_INDEX      = buildCustomerIndex();
+  CATEGORY_INDEX      = buildCategoryIndex();
+  CONDITION_INDEX     = buildConditionIndex();
+  DEPLOY_STATUS_INDEX = buildDeployStatusIndex();
+  CATEGORY_COST_INDEX = buildCategoryCostIndex();
+  CONDITION_COST_INDEX = buildConditionCostIndex();
+  DEVICE_AGE_INDEX    = buildDeviceAgeIndex();
+}
+
+// ----------------------------------------------------------------------------
+// 9. GEODIS HELPERS (for cost analysis views)
+// ----------------------------------------------------------------------------
+
+/**
+ * Aggregate Geodis data by warehouse, with breakdowns by condition and
+ * classification. Returns a map: warehouse -> {monthlyCost, palletCost,
+ * items, currency, byCondition, byClass}.
+ */
+function getGeodisWarehouseCosts() {
+  const map = {};
+  GEODIS_DATA.forEach(d => {
+    if (!map[d.warehouse]) {
+      map[d.warehouse] = {
+        monthlyCost: 0,
+        palletCost:  d.palletCost,
+        items:       0,
+        currency:    getWarehouseMeta(d.warehouse).currency,
+        byCondition: {},
+        byClass:     {}
+      };
+    }
+    map[d.warehouse].monthlyCost += d.monthlyCost;
+    map[d.warehouse].items       += d.items;
+
+    // By condition (New / Used)
+    if (!map[d.warehouse].byCondition[d.condition]) map[d.warehouse].byCondition[d.condition] = {items:0, cost:0};
+    map[d.warehouse].byCondition[d.condition].items += d.items;
+    map[d.warehouse].byCondition[d.condition].cost  += d.monthlyCost;
+
+    // By classification (Dead Stock / Dormant / etc.)
+    if (!map[d.warehouse].byClass[d.classification]) map[d.warehouse].byClass[d.classification] = {items:0, cost:0};
+    map[d.warehouse].byClass[d.classification].items += d.items;
+    map[d.warehouse].byClass[d.classification].cost  += d.monthlyCost;
+  });
+  return map;
+}
+
+/**
+ * Aggregate Tier 2 costs by currency. Returns a map:
+ * currency -> {total, warehouseCount}.
+ */
+function getTier2CostByCurrency() {
+  const map = {};
+  TIER2_SUMMARY_DATA.forEach(d => {
+    const meta = getWarehouseMeta(d.warehouse);
+    // Skip Tier 1 (Geodis) warehouses — their costs come from Geodis data, not Tier 2 estimates
+    if (meta.tier === 1) return;
+    const cur = meta.currency;
+    if (!map[cur]) map[cur] = {total:0, warehouses: new Set()};
+    map[cur].total += d.cost;
+    map[cur].warehouses.add(d.warehouse);
+  });
+  Object.values(map).forEach(v => {
+    v.warehouseCount = v.warehouses.size;
+    delete v.warehouses;
+  });
+  return map;
+}
+
+/**
+ * Compute global summary totals across all warehouses.
+ * Returns {Dead Stock, Dormant, Non-Moving, Slow Moving, total}.
+ */
+function getSummaryTotals() {
+  const t = {'Dead Stock':0, Dormant:0, 'Non-Moving':0, 'Slow Moving':0, total:0};
+  SUMMARY_DATA.forEach(d => {
+    t[d.classification] = (t[d.classification] || 0) + d.items;
+    t.total += d.items;
+  });
+  return t;
+}
+
+// ----------------------------------------------------------------------------
+// 10. PAGINATION HELPER
+// ----------------------------------------------------------------------------
+
+/**
+ * Render pagination controls into a container element.
+ * @param {string} key          - Unique key for this paginated view
+ * @param {number} totalRows    - Total number of rows in the dataset
+ * @param {string} containerId  - DOM ID of the pagination container
+ */
+function renderPagination(key, totalRows, containerId) {
+  if (!paginationState[key]) paginationState[key] = {page:1};
+  const totalPages = Math.ceil(totalRows / PAGE_SIZE);
+  const pg = paginationState[key].page;
+  const container = document.getElementById(containerId);
+  if (!container || totalPages <= 1) {
+    if (container) container.innerHTML = '';
+    return;
+  }
+
+  let html = '<div class="pagination">';
+  // First page
+  html += `<button class="page-btn" onclick="changePage('${key}',1,'${containerId}')" ${pg === 1 ? 'disabled' : ''}>\u00AB</button>`;
+  // Previous page
+  html += `<button class="page-btn" onclick="changePage('${key}',${pg - 1},'${containerId}')" ${pg === 1 ? 'disabled' : ''}>\u2039</button>`;
+  // Page number buttons (window of 5)
+  const start = Math.max(1, pg - 2);
+  const end   = Math.min(totalPages, pg + 2);
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i === pg ? 'active' : ''}" onclick="changePage('${key}',${i},'${containerId}')">${i}</button>`;
+  }
+  // Next page
+  html += `<button class="page-btn" onclick="changePage('${key}',${pg + 1},'${containerId}')" ${pg === totalPages ? 'disabled' : ''}>\u203A</button>`;
+  // Last page
+  html += `<button class="page-btn" onclick="changePage('${key}',${totalPages},'${containerId}')" ${pg === totalPages ? 'disabled' : ''}>\u00BB</button>`;
+  // Info text
+  html += `<span class="page-info">${fmtN((pg - 1) * PAGE_SIZE + 1)}\u2013${fmtN(Math.min(pg * PAGE_SIZE, totalRows))} of ${fmtN(totalRows)}</span>`;
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+/**
+ * Navigate to a specific page and re-render the data explorer.
+ * @param {string} key          - Pagination key
+ * @param {number} page         - Target page number
+ * @param {string} containerId  - DOM ID of the pagination container
+ */
+function changePage(key, page, containerId) {
+  if (!paginationState[key]) paginationState[key] = {page:1};
+  paginationState[key].page = page;
+  // Re-render the data explorer tab
+  renderDataExplorer();
+}
+
+/**
+ * Get the current page slice of a dataset.
+ * @param {Array}  data - Full dataset
+ * @param {string} key  - Pagination key
+ * @returns {Array} Subset of data for the current page
+ */
+function getPageSlice(data, key) {
+  if (!paginationState[key]) paginationState[key] = {page:1};
+  const pg = paginationState[key].page;
+  return data.slice((pg - 1) * PAGE_SIZE, pg * PAGE_SIZE);
+}
+
+/* ================================================================
+   RENDER 1 : Executive Summary
+   Renders into #sec-executive
+   ================================================================ */
+function renderExecutiveSummary() {
+  const totals = getSummaryTotals();
+  const whNames = Object.keys(WAREHOUSE_INDEX);
+  const whCount = whNames.length;
+  const geodisCosts = getGeodisWarehouseCosts();
+  const tier2Costs = getTier2CostByCurrency();
+
+  // ── KPI 1: Total Aging Items ──
+  const totalItems = totals.total;
+
+  // ── KPI 2: Dead Stock ──
+  const deadCount = totals['Dead Stock'] || 0;
+  const deadPct = totalItems ? (deadCount / totalItems * 100).toFixed(1) : '0.0';
+
+  // ── KPI 3: Tier 1 Monthly Cost — dynamic by currency ──
+  const t1ByCurrency = {};
+  for (const wh of Object.keys(geodisCosts)) {
+    const meta = getWarehouseMeta(wh);
+    const cur = meta.currency || 'USD';
+    if (!t1ByCurrency[cur]) t1ByCurrency[cur] = 0;
+    t1ByCurrency[cur] += geodisCosts[wh].monthlyCost;
+  }
+  const t1CurEntries = Object.entries(t1ByCurrency).sort((a, b) => b[1] - a[1]);
+  const t1ValueHtml = t1CurEntries.length > 0
+    ? t1CurEntries.map(([cur, amt]) => fmtCurrency(amt, cur)).join(' + ')
+    : 'No data';
+  const t1SubHtml = t1CurEntries.length > 0
+    ? t1CurEntries.map(([cur, amt]) => fmtCurrency(amt * 12, cur)).join(' + ')
+    : '';
+
+  // ── KPI 4: Tier 2 Monthly Cost — top 2 currencies + rest ──
+  const t2Entries = Object.entries(tier2Costs).sort((a, b) => b[1].total - a[1].total);
+  let t2ValueHtml = '', t2SubHtml = '';
+  if (t2Entries.length > 0) {
+    const top2 = t2Entries.slice(0, 2);
+    const rest = t2Entries.slice(2);
+    t2ValueHtml = top2.map(([cur, d]) => fmtCurrency(d.total, cur)).join(' + ');
+    if (rest.length > 0) {
+      t2SubHtml = rest.map(([cur, d]) => fmtCurrency(d.total, cur)).join(' + ');
+    }
+  } else {
+    t2ValueHtml = 'No data';
+  }
+
+  // ── KPI 5: Customers Affected ──
+  let custCount, custSub;
+  if (hasDetailData) {
+    custCount = Object.keys(CUSTOMER_INDEX).length;
+    custSub = 'From full report data';
+  } else {
+    custCount = 51;
+    custSub = 'Connect API for live count';
+  }
+
+  // ── KPI 6: Critical Warehouses (Dead Stock > 100) ──
+  let criticalCount = 0;
+  for (const wh of whNames) {
+    if ((WAREHOUSE_INDEX[wh]['Dead Stock'] || 0) > 100) criticalCount++;
+  }
+
+  document.getElementById('execKpiGrid').innerHTML = `
+    <div class="kpi-card blue">
+      <div class="kpi-label">Total Aging Items</div>
+      <div class="kpi-value">${fmtN(totalItems)}</div>
+      <div class="kpi-sub">Across ${fmtN(whCount)} warehouses</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Dead Stock</div>
+      <div class="kpi-value">${fmtN(deadCount)}</div>
+      <div class="kpi-sub">${deadPct}% of total</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-label">Tier 1 Monthly Cost</div>
+      <div class="kpi-value"><span style="font-size:22px">${t1ValueHtml}</span></div>
+      <div class="kpi-sub">${t1SubHtml ? 'Annual: ' + t1SubHtml : 'No Geodis cost data'}</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-label">Tier 2 Monthly Cost</div>
+      <div class="kpi-value"><span style="font-size:22px">${t2ValueHtml}</span></div>
+      <div class="kpi-sub">${t2SubHtml || 'All currencies shown above'}</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Customers Affected</div>
+      <div class="kpi-value">${fmtN(custCount)}</div>
+      <div class="kpi-sub">${custSub}</div>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-label">Critical Warehouses</div>
+      <div class="kpi-value">${fmtN(criticalCount)}</div>
+      <div class="kpi-sub">Dead stock &gt; 100 items</div>
+    </div>
+  `;
+
+  // ── Chart 1: Classification Distribution (Doughnut) ──
+  destroyChart('chartClassDist');
+  const classLabels = [...CLASSES];
+  const classData = classLabels.map(c => totals[c] || 0);
+  const classColors = classLabels.map(c => CLASS_COLORS[c]);
+  charts['chartClassDist'] = new Chart(document.getElementById('chartClassDist'), {
+    type: 'doughnut',
+    data: {
+      labels: classLabels,
+      datasets: [{ data: classData, backgroundColor: classColors, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#64748b', padding: 16, font: { size: 12 } } },
+        datalabels: {
+          color: '#fff',
+          font: { weight: 'bold', size: 13 },
+          formatter: (val, ctx) => {
+            const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+            return sum ? (val / sum * 100).toFixed(1) + '%' : '';
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // ── Chart 2: Top 10 Warehouses (Stacked Horizontal Bar) ──
+  destroyChart('chartTopWarehouses');
+  const whSorted = whNames
+    .map(n => ({ name: n, data: WAREHOUSE_INDEX[n] }))
+    .sort((a, b) => (b.data.total || 0) - (a.data.total || 0))
+    .slice(0, 10);
+  charts['chartTopWarehouses'] = new Chart(document.getElementById('chartTopWarehouses'), {
+    type: 'bar',
+    data: {
+      labels: whSorted.map(w => shortName(w.name)),
+      datasets: CLASSES.map(c => ({
+        label: c,
+        data: whSorted.map(w => w.data[c] || 0),
+        backgroundColor: CLASS_COLORS[c]
+      }))
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+        y: { stacked: true, ticks: { color: '#64748b', font: { size: 11 } }, grid: { display: false } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#64748b', padding: 12, font: { size: 11 } } },
+        datalabels: { display: false }
+      }
+    }
+  });
+
+  // ── Chart 3: Cost Comparison (Bar — all warehouses with cost) ──
+  destroyChart('chartCostComparison');
+  const costWarehouses = whNames
+    .filter(n => WAREHOUSE_INDEX[n].monthlyCost !== null && WAREHOUSE_INDEX[n].monthlyCost !== undefined)
+    .map(n => ({
+      name: n,
+      cost: WAREHOUSE_INDEX[n].monthlyCost,
+      currency: WAREHOUSE_INDEX[n].costCurrency || 'USD',
+      tier: (getWarehouseMeta(n) || {}).tier || 0
+    }))
+    .sort((a, b) => b.cost - a.cost);
+
+  charts['chartCostComparison'] = new Chart(document.getElementById('chartCostComparison'), {
+    type: 'bar',
+    data: {
+      labels: costWarehouses.map(w => shortName(w.name)),
+      datasets: [{
+        label: 'Monthly Cost',
+        data: costWarehouses.map(w => w.cost),
+        backgroundColor: costWarehouses.map(w => w.tier === 1 ? '#2563eb' : '#a855f7'),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 }, maxRotation: 45 }, grid: { color: '#e2e8f0' } },
+        y: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Monthly Storage Costs (values in native currencies)',
+          color: '#64748b',
+          font: { size: 12, weight: 'normal' }
+        },
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const w = costWarehouses[ctx.dataIndex];
+              return shortName(w.name) + ': ' + fmtCurrency(w.cost, w.currency) + '/mo';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Chart 4: Risk Bubble ──
+  destroyChart('chartRiskBubble');
+  const bubbleData = whNames.map(n => {
+    const d = WAREHOUSE_INDEX[n];
+    const total = d.total || 0;
+    const dead = d['Dead Stock'] || 0;
+    return {
+      x: total,
+      y: dead,
+      r: Math.max(4, Math.sqrt(total) * 1.2),
+      label: shortName(n)
+    };
+  });
+  charts['chartRiskBubble'] = new Chart(document.getElementById('chartRiskBubble'), {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        label: 'Warehouses',
+        data: bubbleData,
+        backgroundColor: 'rgba(37,99,235,0.3)',
+        borderColor: '#2563eb',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Total Aging Items', color: '#64748b' },
+          ticks: { color: '#64748b' },
+          grid: { color: '#e2e8f0' }
+        },
+        y: {
+          title: { display: true, text: 'Dead Stock Items', color: '#64748b' },
+          ticks: { color: '#64748b' },
+          grid: { color: '#e2e8f0' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          color: '#2563eb',
+          font: { size: 10 },
+          formatter: function(_, ctx) { return ctx.dataset.data[ctx.dataIndex].label; },
+          align: 'top',
+          offset: 4,
+          display: function(ctx) { return ctx.dataset.data[ctx.dataIndex].x > 100; }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var d = ctx.raw;
+              return d.label + ': ' + fmtN(d.x) + ' total, ' + fmtN(d.y) + ' dead stock';
+            }
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+
+/* ================================================================
+   RENDER 2 : Warehouse Analysis
+   Renders into #sec-warehouse
+   ================================================================ */
+
+/* ── Warehouse table: filtered & sorted, called on every filter/sort change ── */
+function renderWarehouseTable() {
+  var whNames = Object.keys(WAREHOUSE_INDEX);
+  var searchVal = (document.getElementById('whSearch').value || '').toLowerCase();
+  var sortVal = document.getElementById('whSort').value;
+  var regionVal = document.getElementById('whRegion').value;
+  var tierVal = document.getElementById('whTier').value;
+
+  var warehouses = whNames.map(function(n) {
+    var d = WAREHOUSE_INDEX[n];
+    var meta = getWarehouseMeta(n);
+    return {
+      name: n,
+      dead: d['Dead Stock'] || 0,
+      dormant: d['Dormant'] || 0,
+      nonMoving: d['Non-Moving'] || 0,
+      slow: d['Slow Moving'] || 0,
+      total: d.total || 0,
+      region: meta ? meta.region : 'Other',
+      tier: meta ? meta.tier : 0,
+      risk: riskScore(d),
+      monthlyCost: d.monthlyCost !== undefined ? d.monthlyCost : null,
+      costCurrency: d.costCurrency || null
+    };
+  });
+
+  var filtered = warehouses.filter(function(w) {
+    if (searchVal && w.name.toLowerCase().indexOf(searchVal) === -1) return false;
+    if (regionVal && w.region !== regionVal) return false;
+    if (tierVal === 'Tier 1' && w.tier !== 1) return false;
+    if (tierVal === 'Tier 2' && w.tier !== 2) return false;
+    if (tierVal === 'Unknown' && w.tier !== 0) return false;
+    return true;
+  });
+
+  if (sortVal === 'total-desc') filtered.sort(function(a, b) { return b.total - a.total; });
+  else if (sortVal === 'total-asc') filtered.sort(function(a, b) { return a.total - b.total; });
+  else if (sortVal === 'dead-desc') filtered.sort(function(a, b) { return b.dead - a.dead; });
+  else if (sortVal === 'name-asc') filtered.sort(function(a, b) { return a.name.localeCompare(b.name); });
+  else if (sortVal === 'risk-desc') filtered.sort(function(a, b) { return b.risk - a.risk; });
+
+  var tbody = document.getElementById('warehouseTbody');
+  tbody.innerHTML = filtered.map(function(w) {
+    var pctDead = w.total ? (w.dead / w.total * 100) : 0;
+    var pctDorm = w.total ? (w.dormant / w.total * 100) : 0;
+    var pctNM = w.total ? (w.nonMoving / w.total * 100) : 0;
+    var pctSlow = w.total ? (w.slow / w.total * 100) : 0;
+
+    var bar = '<div class="progress-bar" style="width:160px;display:flex;overflow:hidden;border-radius:3px;">' +
+      '<div style="width:' + pctDead + '%;background:' + CLASS_COLORS['Dead Stock'] + ';height:6px;" title="Dead Stock ' + pctDead.toFixed(1) + '%"></div>' +
+      '<div style="width:' + pctDorm + '%;background:' + CLASS_COLORS['Dormant'] + ';height:6px;" title="Dormant ' + pctDorm.toFixed(1) + '%"></div>' +
+      '<div style="width:' + pctNM + '%;background:' + CLASS_COLORS['Non-Moving'] + ';height:6px;" title="Non-Moving ' + pctNM.toFixed(1) + '%"></div>' +
+      '<div style="width:' + pctSlow + '%;background:' + CLASS_COLORS['Slow Moving'] + ';height:6px;" title="Slow Moving ' + pctSlow.toFixed(1) + '%"></div>' +
+      '</div>';
+
+    var costCell;
+    if (w.monthlyCost !== null && w.monthlyCost !== undefined) {
+      costCell = '<strong>' + fmtCurrency(w.monthlyCost, w.costCurrency) + '</strong> ' + tierBadge(w.tier);
+    } else {
+      costCell = '<span style="color:var(--text-dim)">No cost data</span>';
+    }
+
+    var currBadge = w.costCurrency
+      ? '<span class="currency-badge">' + w.costCurrency + '</span>'
+      : '<span style="color:var(--text-dim)">-</span>';
+
+    return '<tr>' +
+      '<td><strong>' + shortName(w.name) + '</strong><br><span style="font-size:10px;color:var(--text-dim)">' + w.region + '</span> ' + tierBadge(w.tier) + '</td>' +
+      '<td class="text-right">' + (w.dead > 0 ? '<span class="severity dead">' + fmtN(w.dead) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (w.dormant > 0 ? '<span class="severity dormant">' + fmtN(w.dormant) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (w.nonMoving > 0 ? '<span class="severity non-moving">' + fmtN(w.nonMoving) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (w.slow > 0 ? '<span class="severity slow">' + fmtN(w.slow) + '</span>' : '-') + '</td>' +
+      '<td class="text-right"><strong>' + fmtN(w.total) + '</strong></td>' +
+      '<td>' + bar + '</td>' +
+      '<td class="text-right">' + fmtN(w.risk) + '</td>' +
+      '<td class="text-right">' + costCell + '</td>' +
+      '<td>' + currBadge + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderWarehouseAnalysis() {
+  var whNames = Object.keys(WAREHOUSE_INDEX);
+
+  // ── Populate region dropdown dynamically ──
+  var regionSet = {};
+  whNames.forEach(function(n) {
+    var meta = getWarehouseMeta(n);
+    var region = meta ? meta.region : 'Other';
+    regionSet[region] = true;
+  });
+  var regionSel = document.getElementById('whRegion');
+  var curRegion = regionSel.value;
+  regionSel.innerHTML = '<option value="">All Regions</option>';
+  Object.keys(regionSet).sort().forEach(function(r) {
+    var opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = r;
+    regionSel.appendChild(opt);
+  });
+  if (curRegion) regionSel.value = curRegion;
+
+  // ── Attach filter/sort event listeners (once) ──
+  var whSearchEl = document.getElementById('whSearch');
+  var whSortEl = document.getElementById('whSort');
+  var whRegionEl = document.getElementById('whRegion');
+  var whTierEl = document.getElementById('whTier');
+  if (!whSearchEl._whBound) {
+    whSearchEl.addEventListener('input', renderWarehouseTable);
+    whSortEl.addEventListener('change', renderWarehouseTable);
+    whRegionEl.addEventListener('change', renderWarehouseTable);
+    whTierEl.addEventListener('change', renderWarehouseTable);
+    whSearchEl._whBound = true;
+  }
+
+  renderWarehouseTable();
+
+  // ── Charts use unfiltered data ──
+  var warehouses = whNames.map(function(n) {
+    var d = WAREHOUSE_INDEX[n];
+    var meta = getWarehouseMeta(n);
+    return {
+      name: n,
+      dead: d['Dead Stock'] || 0,
+      dormant: d['Dormant'] || 0,
+      nonMoving: d['Non-Moving'] || 0,
+      slow: d['Slow Moving'] || 0,
+      total: d.total || 0,
+      region: meta ? meta.region : 'Other',
+      tier: meta ? meta.tier : 0,
+      risk: riskScore(d),
+      monthlyCost: d.monthlyCost !== undefined ? d.monthlyCost : null,
+      costCurrency: d.costCurrency || null
+    };
+  });
+
+  // ── Chart 1: Regional Distribution (Pie) ──
+  var regionAgg = {};
+  var regionColors = { 'EMEA': '#3b82f6', 'Americas': '#22c55e', 'APAC': '#f59e0b', 'Other': '#a855f7' };
+  warehouses.forEach(function(w) {
+    regionAgg[w.region] = (regionAgg[w.region] || 0) + w.total;
+  });
+  var rLabels = Object.keys(regionAgg).sort();
+
+  destroyChart('chartRegional');
+  charts['chartRegional'] = new Chart(document.getElementById('chartRegional'), {
+    type: 'pie',
+    data: {
+      labels: rLabels,
+      datasets: [{
+        data: rLabels.map(function(r) { return regionAgg[r]; }),
+        backgroundColor: rLabels.map(function(r) { return regionColors[r] || '#666'; }),
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#64748b', padding: 16 } },
+        datalabels: {
+          color: '#fff',
+          font: { weight: 'bold', size: 13 },
+          formatter: function(val, ctx) {
+            var sum = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+            return sum ? (val / sum * 100).toFixed(1) + '%' : '';
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // ── Chart 2: Classification per Region (Stacked Bar) ──
+  var regionClassAgg = {};
+  warehouses.forEach(function(w) {
+    if (!regionClassAgg[w.region]) {
+      regionClassAgg[w.region] = {};
+      CLASSES.forEach(function(c) { regionClassAgg[w.region][c] = 0; });
+    }
+    regionClassAgg[w.region]['Dead Stock'] += w.dead;
+    regionClassAgg[w.region]['Dormant'] += w.dormant;
+    regionClassAgg[w.region]['Non-Moving'] += w.nonMoving;
+    regionClassAgg[w.region]['Slow Moving'] += w.slow;
+  });
+
+  destroyChart('chartRegionClass');
+  charts['chartRegionClass'] = new Chart(document.getElementById('chartRegionClass'), {
+    type: 'bar',
+    data: {
+      labels: rLabels,
+      datasets: CLASSES.map(function(c) {
+        return {
+          label: c,
+          data: rLabels.map(function(r) { return regionClassAgg[r] ? regionClassAgg[r][c] : 0; }),
+          backgroundColor: CLASS_COLORS[c]
+        };
+      })
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+        y: { stacked: true, ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#64748b', padding: 12, font: { size: 11 } } },
+        datalabels: { display: false }
+      }
+    }
+  });
+}
+
+
+/* ================================================================
+   RENDER 3 : Cost Analysis
+   Renders into #sec-cost — 3 tabs
+   ================================================================ */
+
+/* ── Tab switcher ── */
+function switchCostTab(tabId) {
+  document.querySelectorAll('#sec-cost .tab-btn[data-cost-tab]').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-cost-tab') === tabId);
+  });
+  document.querySelectorAll('#sec-cost .tab-panel').forEach(function(panel) {
+    panel.classList.toggle('active', panel.id === 'costTab-' + tabId);
+  });
+}
+
+function renderCostAnalysis() {
+  // Attach tab click listeners
+  document.querySelectorAll('#sec-cost .tab-btn[data-cost-tab]').forEach(function(btn) {
+    btn.onclick = function() { switchCostTab(btn.getAttribute('data-cost-tab')); };
+  });
+
+  renderCostTier1();
+  renderCostTier2();
+  renderCostCombined();
+}
+
+/* ── Tab 1: Tier 1 (Geodis) ── */
+function renderCostTier1() {
+  var gc = getGeodisWarehouseCosts();
+
+  // Compute per-warehouse costs dynamically (handles UK, Germany, Oshawa, etc.)
+  var geodisWhCosts = {};   // { warehouseName: { cost, items, deadCost, currency, palletCost } }
+  var totalT1Items = 0;
+
+  GEODIS_DATA.forEach(function(d) {
+    totalT1Items += d.items;
+    if (!geodisWhCosts[d.warehouse]) {
+      var meta = getWarehouseMeta(d.warehouse);
+      geodisWhCosts[d.warehouse] = { cost: 0, items: 0, deadCost: 0, currency: meta.currency || 'USD', palletCost: d.palletCost || 0 };
+    }
+    geodisWhCosts[d.warehouse].cost += d.monthlyCost;
+    geodisWhCosts[d.warehouse].items += d.items;
+    if (d.classification === 'Dead Stock') geodisWhCosts[d.warehouse].deadCost += d.monthlyCost;
+  });
+
+  // Build per-warehouse KPI cards
+  var whEntries = Object.entries(geodisWhCosts).sort(function(a, b) { return b[1].cost - a[1].cost; });
+  var kpiColors = ['blue', 'purple', 'green', 'orange'];
+  var whKpiHtml = whEntries.map(function(entry, i) {
+    var whName = entry[0];
+    var d = entry[1];
+    var sym = CURRENCY_SYMBOLS[d.currency] || d.currency;
+    return '<div class="kpi-card ' + kpiColors[i % kpiColors.length] + '">' +
+      '<div class="kpi-label">' + shortName(whName) + ' Monthly</div>' +
+      '<div class="kpi-value">' + fmtCurrency(d.cost, d.currency) + '</div>' +
+      '<div class="kpi-sub">Annual: ' + fmtCurrency(d.cost * 12, d.currency) + ' &middot; ' + sym + d.palletCost.toFixed(2) + '/pallet</div>' +
+    '</div>';
+  }).join('');
+
+  // Dead stock cost card — grouped by currency
+  var deadByCurrency = {};
+  whEntries.forEach(function(entry) {
+    var d = entry[1];
+    if (d.deadCost > 0) {
+      if (!deadByCurrency[d.currency]) deadByCurrency[d.currency] = 0;
+      deadByCurrency[d.currency] += d.deadCost;
+    }
+  });
+  var deadCostParts = Object.entries(deadByCurrency).sort(function(a, b) { return b[1] - a[1]; });
+  var deadValueStr = deadCostParts.map(function(e) { return fmtCurrency(e[1], e[0]); }).join(' + ') || 'N/A';
+  var deadAnnualStr = deadCostParts.map(function(e) { return fmtCurrency(e[1] * 12, e[0]); }).join(' + ') || 'N/A';
+
+  // KPI Grid
+  document.getElementById('tier1KpiGrid').innerHTML =
+    whKpiHtml +
+    '<div class="kpi-card orange">' +
+      '<div class="kpi-label">Total Tier 1 Items</div>' +
+      '<div class="kpi-value">' + fmtN(totalT1Items) + '</div>' +
+      '<div class="kpi-sub">Across ' + whEntries.length + ' Geodis warehouses</div>' +
+    '</div>' +
+    '<div class="kpi-card red">' +
+      '<div class="kpi-label">Dead Stock Cost</div>' +
+      '<div class="kpi-value"><span style="font-size:22px">' + deadValueStr + '</span></div>' +
+      '<div class="kpi-sub">Annual: ' + deadAnnualStr + '</div>' +
+    '</div>';
+
+  // ── Chart: Geodis Costs by Classification (Doughnut) ──
+  var classCostMap = {};
+  GEODIS_DATA.forEach(function(d) {
+    classCostMap[d.classification] = (classCostMap[d.classification] || 0) + d.monthlyCost;
+  });
+  var cLabels = CLASSES.filter(function(c) { return classCostMap[c] > 0; });
+
+  destroyChart('chartGeodisCostClass');
+  charts['chartGeodisCostClass'] = new Chart(document.getElementById('chartGeodisCostClass'), {
+    type: 'doughnut',
+    data: {
+      labels: cLabels,
+      datasets: [{
+        data: cLabels.map(function(c) { return classCostMap[c]; }),
+        backgroundColor: cLabels.map(function(c) { return CLASS_COLORS[c]; }),
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#64748b', padding: 16 } },
+        datalabels: {
+          color: '#fff',
+          font: { weight: 'bold', size: 12 },
+          formatter: function(val) {
+            // Show the value formatted — we don't know the currency here so just show number
+            return fmtN(Math.round(val));
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return ctx.label + ': ' + fmtN(Math.round(ctx.raw)) + '/mo'; }
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // ── Chart: Geodis by Condition (Grouped Bar) ──
+  var condLabels = [];
+  var condValues = [];
+  var condColors = [];
+  GEODIS_DATA.forEach(function(d) {
+    var label = shortName(d.warehouse) + ' \u2014 ' + (d.condition || 'Unknown');
+    var idx = condLabels.indexOf(label);
+    if (idx === -1) {
+      condLabels.push(label);
+      condValues.push(d.monthlyCost);
+      condColors.push(d.condition === 'New' ? '#2563eb' : '#f59e0b');
+    } else {
+      condValues[idx] += d.monthlyCost;
+    }
+  });
+
+  destroyChart('chartGeodisCondition');
+  charts['chartGeodisCondition'] = new Chart(document.getElementById('chartGeodisCondition'), {
+    type: 'bar',
+    data: {
+      labels: condLabels,
+      datasets: [{
+        data: condValues,
+        backgroundColor: condColors,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#e2e8f0' } },
+        y: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } }
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return fmtN(Math.round(ctx.raw)) + '/mo'; }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Geodis Detail Table ──
+  var rows = [];
+  GEODIS_DATA.forEach(function(d) {
+    var existing = rows.find(function(r) { return r.warehouse === d.warehouse && r.condition === d.condition; });
+    if (!existing) {
+      existing = { warehouse: d.warehouse, condition: d.condition || 'Unknown', items: 0, cost: 0, byClass: {} };
+      rows.push(existing);
+    }
+    existing.items += d.items;
+    existing.cost += d.monthlyCost;
+    if (!existing.byClass[d.classification]) existing.byClass[d.classification] = { items: 0, cost: 0 };
+    existing.byClass[d.classification].items += d.items;
+    existing.byClass[d.classification].cost += d.monthlyCost;
+  });
+
+  var geodisTbody = document.getElementById('geodisTbody');
+  geodisTbody.innerHTML = rows.map(function(r) {
+    var currency = getWarehouseMeta(r.warehouse).currency || 'USD';
+    var deadInfo = r.byClass['Dead Stock'];
+    var dormInfo = r.byClass['Dormant'];
+    var nmInfo = r.byClass['Non-Moving'];
+    var slowInfo = r.byClass['Slow Moving'];
+    return '<tr>' +
+      '<td><strong>' + shortName(r.warehouse) + '</strong> <span class="severity ' + (r.condition === 'New' ? 'slow' : 'dormant') + '">' + r.condition + '</span></td>' +
+      '<td class="text-right">' + (deadInfo ? fmtN(deadInfo.items) + ' <span style="font-size:10px;color:var(--text-dim);">(' + fmtCurrency(deadInfo.cost, currency) + ')</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (dormInfo ? fmtN(dormInfo.items) + ' <span style="font-size:10px;color:var(--text-dim);">(' + fmtCurrency(dormInfo.cost, currency) + ')</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (nmInfo ? fmtN(nmInfo.items) + ' <span style="font-size:10px;color:var(--text-dim);">(' + fmtCurrency(nmInfo.cost, currency) + ')</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (slowInfo ? fmtN(slowInfo.items) + ' <span style="font-size:10px;color:var(--text-dim);">(' + fmtCurrency(slowInfo.cost, currency) + ')</span>' : '-') + '</td>' +
+      '<td class="text-right"><strong>' + fmtN(r.items) + '</strong></td>' +
+      '<td class="text-right"><strong>' + fmtCurrency(r.cost, currency) + '</strong></td>' +
+      '<td class="text-right">' + fmtCurrency(r.cost * 12, currency) + '</td>' +
+      '<td><span class="currency-badge">' + currency + '</span></td>' +
+      '</tr>';
+  }).join('');
+
+  // ── Savings Scenarios — dynamic by currency ──
+  var geodisDeadItems = 0, geodisDormItems = 0;
+  var deadCostByCur = {};     // { GBP: X, EUR: Y, CAD: Z }
+  var dormCostByCur = {};
+  var geodisTopWhDead = {};   // per-warehouse dead stock for "top warehouse" scenario
+
+  GEODIS_DATA.forEach(function(d) {
+    var cur = getWarehouseMeta(d.warehouse).currency || 'USD';
+    if (d.classification === 'Dead Stock') {
+      geodisDeadItems += d.items;
+      deadCostByCur[cur] = (deadCostByCur[cur] || 0) + d.monthlyCost;
+      if (!geodisTopWhDead[d.warehouse]) geodisTopWhDead[d.warehouse] = { items: 0, cost: 0, currency: cur };
+      geodisTopWhDead[d.warehouse].items += d.items;
+      geodisTopWhDead[d.warehouse].cost += d.monthlyCost;
+    }
+    if (d.classification === 'Dormant') {
+      geodisDormItems += d.items;
+      dormCostByCur[cur] = (dormCostByCur[cur] || 0) + d.monthlyCost;
+    }
+  });
+
+  // Build display strings from currency maps
+  function costMapToStr(map, mult) {
+    var entries = Object.entries(map).sort(function(a, b) { return b[1] - a[1]; });
+    if (entries.length === 0) return 'N/A';
+    return entries.map(function(e) { return fmtCurrency(e[1] * (mult || 1), e[0]); }).join(' + ');
+  }
+  function curBadges(map) {
+    return Object.keys(map).sort().map(function(c) { return '<span class="currency-badge">' + c + '</span>'; }).join(' ');
+  }
+
+  // Combined dead + dormant costs
+  var deadDormCostByCur = {};
+  Object.entries(deadCostByCur).forEach(function(e) { deadDormCostByCur[e[0]] = (deadDormCostByCur[e[0]] || 0) + e[1]; });
+  Object.entries(dormCostByCur).forEach(function(e) { deadDormCostByCur[e[0]] = (deadDormCostByCur[e[0]] || 0) + e[1]; });
+
+  // Find highest-cost Geodis warehouse for targeted scenario
+  var topDeadWh = Object.entries(geodisTopWhDead).sort(function(a, b) { return b[1].cost - a[1].cost; })[0];
+  var topWhName = topDeadWh ? topDeadWh[0] : '';
+  var topWhData = topDeadWh ? topDeadWh[1] : { items: 0, cost: 0, currency: 'USD' };
+
+  // List all Geodis warehouses for description
+  var allGeoWhNames = Object.keys(geodisWhCosts).map(function(n) { return shortName(n); }).join(', ');
+
+  var savingsTbody = document.getElementById('savingsTbody');
+  savingsTbody.innerHTML =
+    '<tr>' +
+      '<td><strong>Clear all Geodis Dead Stock</strong></td>' +
+      '<td>Liquidate, donate, or dispose of dead stock across all Geodis warehouses (' + allGeoWhNames + ')</td>' +
+      '<td class="text-right">' + fmtN(geodisDeadItems) + '</td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + costMapToStr(deadCostByCur, 1) + '</strong></td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + costMapToStr(deadCostByCur, 12) + '</strong></td>' +
+      '<td>' + curBadges(deadCostByCur) + '</td>' +
+    '</tr>' +
+    '<tr>' +
+      '<td><strong>Clear Dead Stock + Dormant</strong></td>' +
+      '<td>Aggressive clearance of non-productive Geodis inventory</td>' +
+      '<td class="text-right">' + fmtN(geodisDeadItems + geodisDormItems) + '</td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + costMapToStr(deadDormCostByCur, 1) + '</strong></td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + costMapToStr(deadDormCostByCur, 12) + '</strong></td>' +
+      '<td>' + curBadges(deadDormCostByCur) + '</td>' +
+    '</tr>' +
+    '<tr>' +
+      '<td><strong>50% Dead Stock Reduction</strong></td>' +
+      '<td>Targeted clearance of highest-cost dead stock items</td>' +
+      '<td class="text-right">' + fmtN(Math.round(geodisDeadItems / 2)) + '</td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + costMapToStr(deadCostByCur, 0.5) + '</strong></td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + costMapToStr(deadCostByCur, 6) + '</strong></td>' +
+      '<td>' + curBadges(deadCostByCur) + '</td>' +
+    '</tr>' +
+    (topWhName ? '<tr>' +
+      '<td><strong>Clear ' + shortName(topWhName) + ' Dead Stock Only</strong></td>' +
+      '<td>Focus on highest-cost Geodis centre</td>' +
+      '<td class="text-right">' + fmtN(topWhData.items) + '</td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + fmtCurrency(topWhData.cost, topWhData.currency) + '</strong></td>' +
+      '<td class="text-right"><strong style="color:var(--green)">' + fmtCurrency(topWhData.cost * 12, topWhData.currency) + '</strong></td>' +
+      '<td><span class="currency-badge">' + topWhData.currency + '</span></td>' +
+    '</tr>' : '');
+}
+
+/* ── Tab 2: Tier 2 ── */
+function renderCostTier2() {
+  var t2Costs = getTier2CostByCurrency();
+
+  // KPI Grid — one card per currency
+  var t2Entries = Object.entries(t2Costs).sort(function(a, b) { return b[1].total - a[1].total; });
+  var kpiColors = ['blue', 'purple', 'orange', 'green', 'red'];
+  document.getElementById('tier2KpiGrid').innerHTML = t2Entries.map(function(entry, i) {
+    var cur = entry[0];
+    var data = entry[1];
+    var color = kpiColors[i % kpiColors.length];
+    return '<div class="kpi-card ' + color + '">' +
+      '<div class="kpi-label">' + cur + ' Monthly</div>' +
+      '<div class="kpi-value">' + fmtCurrency(data.total, cur) + '</div>' +
+      '<div class="kpi-sub">Annual: ' + fmtCurrency(data.total * 12, cur) + ' &middot; ' + fmtN(data.warehouseCount || 0) + ' warehouses</div>' +
+    '</div>';
+  }).join('');
+
+  // ── Aggregate Tier 2 costs per warehouse (skip Tier 1 — they use Geodis costs) ──
+  var t2ByWh = {};
+  TIER2_SUMMARY_DATA.forEach(function(d) {
+    var key = d.warehouse || d.name;
+    var meta = getWarehouseMeta(key);
+    if (meta.tier === 1) return; // Tier 1 warehouses use Geodis costs, not Tier 2 estimates
+    if (!t2ByWh[key]) t2ByWh[key] = { name: key, cost: 0, currency: meta.currency, items: 0, byClass: {} };
+    t2ByWh[key].cost += (d.cost || 0);
+    t2ByWh[key].items += (d.items || 0);
+    var cls = d.classification || 'Unknown';
+    if (!t2ByWh[key].byClass[cls]) t2ByWh[key].byClass[cls] = { items: 0, cost: 0 };
+    t2ByWh[key].byClass[cls].items += (d.items || 0);
+    t2ByWh[key].byClass[cls].cost += (d.cost || 0);
+  });
+  var t2WhList = Object.values(t2ByWh).sort(function(a, b) { return b.cost - a.cost; });
+
+  // ── Chart: Top 10 Tier 2 (Horizontal Bar) ──
+  destroyChart('chartTier2Top');
+  var top10T2 = t2WhList.slice(0, 10);
+  charts['chartTier2Top'] = new Chart(document.getElementById('chartTier2Top'), {
+    type: 'bar',
+    data: {
+      labels: top10T2.map(function(w) { return shortName(w.name); }),
+      datasets: [{
+        label: 'Monthly Cost',
+        data: top10T2.map(function(w) { return w.cost; }),
+        backgroundColor: '#a855f7',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+        y: { ticks: { color: '#334155', font: { size: 12, weight: 600 } }, grid: { display: false } }
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          color: '#fff',
+          anchor: 'end',
+          align: 'left',
+          font: { size: 10, weight: 'bold' },
+          formatter: function(val, ctx) {
+            var w = top10T2[ctx.dataIndex];
+            return fmtCurrency(val, w.currency);
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              var w = top10T2[ctx.dataIndex];
+              return shortName(w.name) + ': ' + fmtCurrency(w.cost, w.currency) + '/mo';
+            }
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // ── Chart: Tier 2 Classification Distribution (Doughnut) ──
+  var t2ClassCost = {};
+  TIER2_SUMMARY_DATA.forEach(function(d) {
+    if (getWarehouseMeta(d.warehouse).tier === 1) return; // Skip Tier 1
+    var cls = d.classification || 'Unknown';
+    t2ClassCost[cls] = (t2ClassCost[cls] || 0) + (d.cost || 0);
+  });
+  var t2ClassLabels = CLASSES.filter(function(c) { return t2ClassCost[c] > 0; });
+  if (t2ClassLabels.length === 0) t2ClassLabels = Object.keys(t2ClassCost).filter(function(k) { return t2ClassCost[k] > 0; });
+
+  destroyChart('chartTier2ClassDist');
+  charts['chartTier2ClassDist'] = new Chart(document.getElementById('chartTier2ClassDist'), {
+    type: 'doughnut',
+    data: {
+      labels: t2ClassLabels,
+      datasets: [{
+        data: t2ClassLabels.map(function(c) { return t2ClassCost[c] || 0; }),
+        backgroundColor: t2ClassLabels.map(function(c) { return CLASS_COLORS[c] || '#64748b'; }),
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#64748b', padding: 16 } },
+        datalabels: {
+          color: '#fff',
+          font: { weight: 'bold', size: 12 },
+          formatter: function(val, ctx) {
+            var sum = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+            return sum ? (val / sum * 100).toFixed(1) + '%' : '';
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // ── Tier 2 Cost Table (skip Tier 1 warehouses) ──
+  var t2Rows = [];
+  TIER2_SUMMARY_DATA.forEach(function(d) {
+    var meta = getWarehouseMeta(d.warehouse);
+    if (meta.tier === 1) return; // Tier 1 warehouses use Geodis costs
+    t2Rows.push({
+      warehouse: d.warehouse || d.name,
+      classification: d.classification || 'N/A',
+      items: d.items || 0,
+      cost: d.cost || 0,
+      currency: meta.currency
+    });
+  });
+  t2Rows.sort(function(a, b) {
+    var cmp = a.warehouse.localeCompare(b.warehouse);
+    return cmp !== 0 ? cmp : b.cost - a.cost;
+  });
+
+  document.getElementById('tier2CostTbody').innerHTML = t2Rows.map(function(r) {
+    return '<tr>' +
+      '<td><strong>' + shortName(r.warehouse) + '</strong></td>' +
+      '<td>' + r.classification + '</td>' +
+      '<td class="text-right">' + fmtN(r.items) + '</td>' +
+      '<td class="text-right">' + fmtCurrency(r.cost, r.currency) + '</td>' +
+      '<td class="text-right">' + fmtCurrency(r.cost * 12, r.currency) + '</td>' +
+      '<td><span class="currency-badge">' + r.currency + '</span></td>' +
+    '</tr>';
+  }).join('');
+
+  // ── 3PL Provider Table ──
+  var plTbody = document.getElementById('tier2PlTbody');
+  if (TIER2_DETAIL_DATA && TIER2_DETAIL_DATA.length > 0) {
+    var plAgg = {};
+    TIER2_DETAIL_DATA.forEach(function(d) {
+      var provider = d.tpl || d.provider || 'Unknown';
+      if (!plAgg[provider]) plAgg[provider] = { items: 0, warehouses: {}, cost: 0 };
+      plAgg[provider].items += 1;
+      plAgg[provider].cost += (d.cost || 0);
+      var wh = d.warehouse || d.name || '';
+      plAgg[provider].warehouses[wh] = true;
+    });
+    var plList = Object.entries(plAgg).sort(function(a, b) { return b[1].items - a[1].items; });
+    plTbody.innerHTML = plList.map(function(entry) {
+      var name = entry[0];
+      var data = entry[1];
+      var whCount = Object.keys(data.warehouses).length;
+      var avgCost = data.items > 0 ? (data.cost / data.items) : 0;
+      return '<tr>' +
+        '<td><strong>' + name + '</strong></td>' +
+        '<td class="text-right">' + fmtN(data.items) + '</td>' +
+        '<td class="text-right">' + fmtN(whCount) + '</td>' +
+        '<td class="text-right">' + avgCost.toFixed(2) + '</td>' +
+      '</tr>';
+    }).join('');
+  } else {
+    plTbody.innerHTML = '<tr><td colspan="4">' +
+      '<div class="data-banner"><div class="banner-icon">&#128279;</div><p>Connect to API for 3PL breakdown</p></div>' +
+      '</td></tr>';
+  }
+}
+
+/* ── Tab 3: Combined ── */
+function renderCostCombined() {
+  var whNames = Object.keys(WAREHOUSE_INDEX);
+
+  // Build combined list
+  var combined = whNames.map(function(n) {
+    var d = WAREHOUSE_INDEX[n];
+    var meta = getWarehouseMeta(n);
+    var tier = meta ? meta.tier : 0;
+    return {
+      name: n,
+      tier: tier,
+      total: d.total || 0,
+      cost: d.monthlyCost !== undefined && d.monthlyCost !== null ? d.monthlyCost : null,
+      currency: d.costCurrency || null
+    };
+  });
+
+  // Sort: group by currency, within each group sort by cost descending
+  combined.sort(function(a, b) {
+    var aCur = a.currency || 'ZZZ';
+    var bCur = b.currency || 'ZZZ';
+    if (aCur !== bCur) return aCur.localeCompare(bCur);
+    var aCost = a.cost !== null ? a.cost : -1;
+    var bCost = b.cost !== null ? b.cost : -1;
+    return bCost - aCost;
+  });
+
+  var combinedTbody = document.getElementById('combinedCostTbody');
+  combinedTbody.innerHTML = combined.map(function(w) {
+    var tierLabel = w.tier === 1 ? 'Tier 1' : w.tier === 2 ? 'Tier 2' : 'Unknown';
+    var costCell, annualCell, currCell;
+    if (w.cost !== null) {
+      costCell = '<strong>' + fmtCurrency(w.cost, w.currency) + '</strong>';
+      annualCell = fmtCurrency(w.cost * 12, w.currency);
+      currCell = '<span class="currency-badge">' + w.currency + '</span>';
+    } else {
+      costCell = '<span style="color:var(--text-dim)">No cost data</span>';
+      annualCell = '<span style="color:var(--text-dim)">-</span>';
+      currCell = '<span style="color:var(--text-dim)">-</span>';
+    }
+    return '<tr>' +
+      '<td><strong>' + shortName(w.name) + '</strong></td>' +
+      '<td>' + tierBadge(w.tier) + '</td>' +
+      '<td class="text-right">' + fmtN(w.total) + '</td>' +
+      '<td class="text-right">' + costCell + '</td>' +
+      '<td>' + currCell + '</td>' +
+      '<td class="text-right">' + annualCell + '</td>' +
+    '</tr>';
+  }).join('');
+
+  // ── Per-Currency Totals ──
+  var currTotals = {};
+  combined.forEach(function(w) {
+    if (w.cost !== null && w.currency) {
+      if (!currTotals[w.currency]) currTotals[w.currency] = { monthly: 0, count: 0 };
+      currTotals[w.currency].monthly += w.cost;
+      currTotals[w.currency].count++;
+    }
+  });
+
+  var currTotalsEl = document.getElementById('currencyTotals');
+  var currEntries = Object.entries(currTotals).sort(function(a, b) { return b[1].monthly - a[1].monthly; });
+  currTotalsEl.innerHTML = '<div class="kpi-grid">' + currEntries.map(function(entry) {
+    var cur = entry[0];
+    var data = entry[1];
+    return '<div class="kpi-card blue">' +
+      '<div class="kpi-label">' + cur + '</div>' +
+      '<div class="kpi-value">' + fmtCurrency(data.monthly, cur) + '</div>' +
+      '<div class="kpi-sub">Annual: ' + fmtCurrency(data.monthly * 12, cur) + ' &middot; ' + fmtN(data.count) + ' warehouses</div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+
+/* ================================================================
+   RENDER 4 : Customer Analysis
+   Renders into #sec-customer
+   ================================================================ */
+function renderCustomerAnalysis() {
+  var banner = document.getElementById('customerBanner');
+  var kpiGrid = document.getElementById('customerKpiGrid');
+  var chartsRow = document.querySelector('#sec-customer .grid-2');
+  var tableCard = document.querySelector('#sec-customer .card:last-of-type');
+
+  // If no detail data, show banner and hide rest
+  if (!hasDetailData) {
+    banner.style.display = 'block';
+    kpiGrid.innerHTML = '';
+    if (chartsRow) chartsRow.style.display = 'none';
+    if (tableCard) tableCard.style.display = 'none';
+    return;
+  }
+
+  // Has data — hide banner, show content
+  banner.style.display = 'none';
+  if (chartsRow) chartsRow.style.display = '';
+  if (tableCard) tableCard.style.display = '';
+
+  var custNames = Object.keys(CUSTOMER_INDEX);
+
+  // Build customer list
+  var customers = custNames.map(function(name) {
+    var d = CUSTOMER_INDEX[name];
+    return {
+      name: name,
+      total: d.total || 0,
+      dead: d['Dead Stock'] || 0,
+      dormant: d['Dormant'] || 0,
+      nonMoving: d['Non-Moving'] || 0,
+      slow: d['Slow Moving'] || 0,
+      warehouses: d.warehouseCount || 0,
+      categories: d.categories || {}
+    };
+  });
+
+  // Sort by total desc
+  customers.sort(function(a, b) { return b.total - a.total; });
+
+  // ── Find top customer by items and by dead stock ──
+  var topByItems = customers[0] || { name: 'N/A', total: 0 };
+  var topByDead = customers.slice().sort(function(a, b) { return b.dead - a.dead; })[0] || { name: 'N/A', dead: 0 };
+  var countOver100 = customers.filter(function(c) { return c.total >= 100; }).length;
+
+  // ── KPI Grid ──
+  kpiGrid.innerHTML =
+    '<div class="kpi-card blue">' +
+      '<div class="kpi-label">Total Customers</div>' +
+      '<div class="kpi-value">' + fmtN(custNames.length) + '</div>' +
+      '<div class="kpi-sub">With aging inventory</div>' +
+    '</div>' +
+    '<div class="kpi-card orange">' +
+      '<div class="kpi-label">Top Customer by Items</div>' +
+      '<div class="kpi-value">' + fmtN(topByItems.total) + '</div>' +
+      '<div class="kpi-sub">' + topByItems.name + '</div>' +
+    '</div>' +
+    '<div class="kpi-card red">' +
+      '<div class="kpi-label">Top Customer by Dead Stock</div>' +
+      '<div class="kpi-value">' + fmtN(topByDead.dead) + '</div>' +
+      '<div class="kpi-sub">' + topByDead.name + '</div>' +
+    '</div>' +
+    '<div class="kpi-card purple">' +
+      '<div class="kpi-label">Customers with 100+ Items</div>' +
+      '<div class="kpi-value">' + fmtN(countOver100) + '</div>' +
+      '<div class="kpi-sub">Significant aging holdings</div>' +
+    '</div>';
+
+  // ── Chart: Top 16 Customers (Horizontal Bar) ──
+  destroyChart('chartTopCustomers');
+  var top16 = customers.slice(0, 16);
+  charts['chartTopCustomers'] = new Chart(document.getElementById('chartTopCustomers'), {
+    type: 'bar',
+    data: {
+      labels: top16.map(function(c) { return c.name; }),
+      datasets: [{
+        label: 'Total Items',
+        data: top16.map(function(c) { return c.total; }),
+        backgroundColor: '#2563eb',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+        y: { ticks: { color: '#64748b', font: { size: 11 } }, grid: { display: false } }
+      },
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) { return 'Total: ' + fmtN(ctx.raw) + ' items'; }
+          }
+        }
+      }
+    }
+  });
+
+  // ── Chart: Top 16 Customer Classification Breakdown (Stacked Horizontal Bar) ──
+  destroyChart('chartCustomerClass');
+  charts['chartCustomerClass'] = new Chart(document.getElementById('chartCustomerClass'), {
+    type: 'bar',
+    data: {
+      labels: top16.map(function(c) { return c.name; }),
+      datasets: CLASSES.map(function(cls) {
+        return {
+          label: cls,
+          data: top16.map(function(c) {
+            if (cls === 'Dead Stock') return c.dead;
+            if (cls === 'Dormant') return c.dormant;
+            if (cls === 'Non-Moving') return c.nonMoving;
+            if (cls === 'Slow Moving') return c.slow;
+            return 0;
+          }),
+          backgroundColor: CLASS_COLORS[cls]
+        };
+      })
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+        y: { stacked: true, ticks: { color: '#64748b', font: { size: 11 } }, grid: { display: false } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#64748b', padding: 12, font: { size: 11 } } },
+        datalabels: { display: false }
+      }
+    }
+  });
+
+  // ── Customer Table ──
+  var customerTbody = document.getElementById('customerTbody');
+  customerTbody.innerHTML = customers.map(function(c) {
+    // Determine primary category (highest count)
+    var primaryCategory = '-';
+    var maxCatCount = 0;
+    if (c.categories) {
+      for (var cat in c.categories) {
+        if (c.categories[cat] > maxCatCount) {
+          maxCatCount = c.categories[cat];
+          primaryCategory = cat;
+        }
+      }
+    }
+    return '<tr>' +
+      '<td><strong>' + c.name + '</strong></td>' +
+      '<td class="text-right"><strong>' + fmtN(c.total) + '</strong></td>' +
+      '<td class="text-right">' + (c.dead > 0 ? '<span class="severity dead">' + fmtN(c.dead) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (c.dormant > 0 ? '<span class="severity dormant">' + fmtN(c.dormant) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (c.nonMoving > 0 ? '<span class="severity non-moving">' + fmtN(c.nonMoving) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + (c.slow > 0 ? '<span class="severity slow">' + fmtN(c.slow) + '</span>' : '-') + '</td>' +
+      '<td class="text-right">' + fmtN(c.warehouses) + '</td>' +
+      '<td>' + primaryCategory + '</td>' +
+    '</tr>';
+  }).join('');
+}
+/* ================================================================
+   SECTION RENDERERS — Asset Profile, Action Plan, Data Explorer
+   ================================================================ */
+
+/* ── Severity class helper ─────────────────────────────────────── */
+function sevClass(c) {
+  return c === 'Dead Stock' ? 'dead' : c === 'Dormant' ? 'dormant' : c === 'Non-Moving' ? 'non-moving' : 'slow';
+}
+
+/* ================================================================
+   1. ASSET PROFILE
+   ================================================================ */
+
+/* Tab switcher */
+function switchAssetTab(tabId) {
+  document.querySelectorAll('#sec-asset .tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#sec-asset .tab-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('assetTab-' + tabId);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('#sec-asset .tab-btn').forEach(b => {
+    if (b.getAttribute('data-asset-tab') === tabId) b.classList.add('active');
+  });
+}
+
+/* Attach tab click handlers */
+document.querySelectorAll('#sec-asset .tab-btn[data-asset-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchAssetTab(btn.getAttribute('data-asset-tab')));
+});
+
+function renderAssetProfile() {
+  const banner = document.getElementById('assetBanner');
+
+  /* ── Gate: require detail data ──────────────────────────────── */
+  if (!hasDetailData) {
+    if (banner) banner.style.display = '';
+    return;
+  }
+  if (banner) banner.style.display = 'none';
+
+  /* Helper: format a multi-currency cost object as a display string */
+  function fmtMultiCurrency(costObj) {
+    if (!costObj || Object.keys(costObj).length === 0) return '-';
+    return Object.entries(costObj)
+      .filter(([_, amt]) => amt > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cur, amt]) => fmtCurrency(amt, cur))
+      .join(' + ') || '-';
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     Tab 1 : Product Categories
+     ────────────────────────────────────────────────────────────── */
+  const catEntries = Object.entries(CATEGORY_INDEX)
+    .map(([name, d]) => ({ name, ...d }))
+    .sort((a, b) => b.total - a.total);
+
+  const catTotal = catEntries.reduce((s, c) => s + c.total, 0);
+  const topCat = catEntries.length > 0 ? catEntries[0].name : null;
+
+  /* Category cost KPI cards */
+  const catCostKpiEl = document.getElementById('categoryCostKpiGrid');
+  if (catCostKpiEl && Object.keys(CATEGORY_COST_INDEX).length > 0) {
+    // Aggregate total Tier 2 cost by currency across all categories
+    const totalCostByCur = {};
+    Object.values(CATEGORY_COST_INDEX).forEach(curMap => {
+      Object.entries(curMap).forEach(([cur, amt]) => {
+        totalCostByCur[cur] = (totalCostByCur[cur] || 0) + amt;
+      });
+    });
+    const costKpiColors = ['blue', 'purple', 'orange', 'green'];
+    const curEntries = Object.entries(totalCostByCur).sort((a, b) => b[1] - a[1]);
+    catCostKpiEl.innerHTML = curEntries.map(([cur, amt], i) => `
+      <div class="kpi-card ${costKpiColors[i % costKpiColors.length]}">
+        <div class="kpi-label">Tier 2 Monthly (${cur})</div>
+        <div class="kpi-value">${fmtCurrency(amt, cur)}</div>
+        <div class="kpi-sub">Annual: ${fmtCurrency(amt * 12, cur)}</div>
+      </div>
+    `).join('');
+  } else if (catCostKpiEl) {
+    catCostKpiEl.innerHTML = '';
+  }
+
+  /* Category table */
+  const catTbody = document.getElementById('categoryTbody');
+  if (catTbody) {
+    const hasCostData = Object.keys(CATEGORY_COST_INDEX).length > 0;
+    catTbody.innerHTML = catEntries.map(c => {
+      const isTop = c.name === topCat;
+      const style = isTop ? ' style="font-weight:700;background:rgba(37,99,235,0.06);"' : '';
+      const costObj = CATEGORY_COST_INDEX[c.name] || {};
+      const monthlyCostStr = hasCostData ? fmtMultiCurrency(costObj) : '-';
+      const annualCostObj = {};
+      Object.entries(costObj).forEach(([cur, amt]) => { annualCostObj[cur] = amt * 12; });
+      const annualCostStr = hasCostData ? fmtMultiCurrency(annualCostObj) : '-';
+      return `<tr${style}>
+        <td>${c.name}</td>
+        <td class="text-right">${fmtN(c['Dead Stock'] || 0)}</td>
+        <td class="text-right">${fmtN(c['Dormant'] || 0)}</td>
+        <td class="text-right">${fmtN(c['Non-Moving'] || 0)}</td>
+        <td class="text-right">${fmtN(c['Slow Moving'] || 0)}</td>
+        <td class="text-right"><strong>${fmtN(c.total)}</strong></td>
+        <td class="text-right">${pctOf(c.total, catTotal)}</td>
+        <td class="text-right">${monthlyCostStr}</td>
+        <td class="text-right">${annualCostStr}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* Top 10 categories horizontal bar chart */
+  destroyChart('chartTopCategories');
+  const top10Cat = catEntries.slice(0, 10);
+  const catCanvas = document.getElementById('chartTopCategories');
+  if (catCanvas) {
+    charts['chartTopCategories'] = new Chart(catCanvas, {
+      type: 'bar',
+      data: {
+        labels: top10Cat.map(c => c.name),
+        datasets: [{
+          label: 'Total Items',
+          data: top10Cat.map(c => c.total),
+          backgroundColor: '#2563eb',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        scales: {
+          x: { ticks: { color: '#64748b' }, grid: { color: '#e2e8f0' } },
+          y: { ticks: { color: '#64748b', font: { size: 11 } }, grid: { display: false } }
+        },
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            color: '#fff',
+            anchor: 'end',
+            align: 'left',
+            font: { size: 11, weight: 'bold' },
+            formatter: v => fmtN(v)
+          }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+  }
+
+  /* ──────────────────────────────────────────────────────────────
+     Tab 2 : Item Conditions
+     ────────────────────────────────────────────────────────────── */
+
+  /* Summary group cards */
+  const condEntries = Object.entries(CONDITION_INDEX);
+  const frTotal = FULL_REPORT_DATA.length;
+
+  let newCount = 0, usedCount = 0, unusableCount = 0;
+  condEntries.forEach(([name, d]) => {
+    if (name.startsWith('NEW')) newCount += d.total;
+    else if (name.startsWith('USED')) usedCount += d.total;
+    if (name === 'UNUSABLE') unusableCount += d.total;
+  });
+
+  const condSummaryEl = document.getElementById('conditionSummary');
+  if (condSummaryEl) {
+    condSummaryEl.innerHTML = `
+      <div style="display:flex;gap:16px;margin-bottom:20px;">
+        <div class="kpi-card green" style="flex:1;">
+          <div class="kpi-label">New Items</div>
+          <div class="kpi-value" style="color:var(--green);">${fmtN(newCount)}</div>
+          <div class="kpi-sub">${frTotal > 0 ? pctOf(newCount, frTotal) : '0%'} of Full Report items</div>
+        </div>
+        <div class="kpi-card orange" style="flex:1;">
+          <div class="kpi-label">Used Items</div>
+          <div class="kpi-value" style="color:var(--orange);">${fmtN(usedCount)}</div>
+          <div class="kpi-sub">${frTotal > 0 ? pctOf(usedCount, frTotal) : '0%'} of Full Report items</div>
+        </div>
+        <div class="kpi-card red" style="flex:1;">
+          <div class="kpi-label">Unusable Items</div>
+          <div class="kpi-value" style="color:var(--red);">${fmtN(unusableCount)}</div>
+          <div class="kpi-sub">${frTotal > 0 ? pctOf(unusableCount, frTotal) : '0%'} of Full Report items</div>
+        </div>
+      </div>`;
+  }
+
+  /* Condition table */
+  const condSorted = condEntries
+    .map(([name, d]) => ({ name, ...d }))
+    .sort((a, b) => b.total - a.total);
+
+  const condTbody = document.getElementById('conditionTbody');
+  if (condTbody) {
+    const hasCondCostData = Object.keys(CONDITION_COST_INDEX).length > 0;
+    condTbody.innerHTML = condSorted.map(c => {
+      const costObj = CONDITION_COST_INDEX[c.name] || {};
+      const monthlyCostStr = hasCondCostData ? fmtMultiCurrency(costObj) : '-';
+      const annualCostObj = {};
+      Object.entries(costObj).forEach(([cur, amt]) => { annualCostObj[cur] = amt * 12; });
+      const annualCostStr = hasCondCostData ? fmtMultiCurrency(annualCostObj) : '-';
+      return `<tr>
+      <td>${c.name}</td>
+      <td class="text-right"><strong>${fmtN(c.total)}</strong></td>
+      <td class="text-right">${frTotal > 0 ? pctOf(c.total, frTotal) : '0%'}</td>
+      <td class="text-right">${fmtN(c['Dead Stock'] || 0)}</td>
+      <td class="text-right">${fmtN(c['Dormant'] || 0)}</td>
+      <td class="text-right">${fmtN(c['Non-Moving'] || 0)}</td>
+      <td class="text-right">${fmtN(c['Slow Moving'] || 0)}</td>
+      <td class="text-right">${monthlyCostStr}</td>
+      <td class="text-right">${annualCostStr}</td>
+    </tr>`;
+    }).join('');
+  }
+
+  /* Condition distribution doughnut */
+  const condColorMap = {
+    'NEW': '#22c55e',
+    'USED': '#f59e0b',
+    'USED_FAIR': '#eab308',
+    'USED_GOOD': '#3b82f6',
+    'USED_LIKE_NEW': '#2563eb',
+    'USED_POOR': '#ef4444',
+    'UNUSABLE': '#991b1b'
+  };
+  const condChartData = condSorted.filter(c => c.total > 0);
+  const condLabels = condChartData.map(c => c.name);
+  const condValues = condChartData.map(c => c.total);
+  const condColors = condLabels.map(name => {
+    const key = name.replace(/[\s-]/g, '_').toUpperCase();
+    return condColorMap[key] || condColorMap[name] || '#94a3b8';
+  });
+
+  destroyChart('chartConditionDist');
+  const condCanvas = document.getElementById('chartConditionDist');
+  if (condCanvas) {
+    charts['chartConditionDist'] = new Chart(condCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: condLabels,
+        datasets: [{ data: condValues, backgroundColor: condColors, borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#64748b', padding: 12, font: { size: 11 } } },
+          datalabels: {
+            color: '#fff',
+            font: { weight: 'bold', size: 11 },
+            formatter: (v, ctx) => {
+              const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = (v / sum * 100).toFixed(1);
+              return pct > 3 ? pct + '%' : '';
+            }
+          }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+  }
+
+  /* Deploy Status doughnut */
+  const deployEntries = Object.entries(DEPLOY_STATUS_INDEX || {})
+    .map(([name, d]) => ({ name, total: d.total || d }))
+    .filter(d => d.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const deployBlues = ['#1e3a5f', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#6b7280', '#9ca3af', '#d1d5db'];
+
+  destroyChart('chartDeployStatus');
+  const deployCanvas = document.getElementById('chartDeployStatus');
+  if (deployCanvas && deployEntries.length > 0) {
+    charts['chartDeployStatus'] = new Chart(deployCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: deployEntries.map(d => d.name),
+        datasets: [{
+          data: deployEntries.map(d => d.total),
+          backgroundColor: deployEntries.map((_, i) => deployBlues[i % deployBlues.length]),
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#64748b', padding: 12, font: { size: 11 } } },
+          datalabels: {
+            color: '#fff',
+            font: { weight: 'bold', size: 11 },
+            formatter: (v, ctx) => {
+              const sum = ctx.dataset.data.reduce((a, b) => a + b, 0);
+              const pct = (v / sum * 100).toFixed(1);
+              return pct > 3 ? pct + '%' : '';
+            }
+          }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+  }
+
+}
+
+
+
+/* ================================================================
+   2. ACTION PLAN
+   ================================================================ */
+function renderActionPlan() {
+  const totals = getSummaryTotals();
+  const geodisCosts = getGeodisWarehouseCosts();
+  const tier2Costs = getTier2CostByCurrency();
+  const whCount = Object.keys(WAREHOUSE_INDEX).length;
+
+  /* ── Compute cost aggregates ──────────────────────────────────── */
+  const costParts = [];
+  const annualParts = [];
+  const geodisByCurrency = {};
+  Object.keys(geodisCosts).forEach(name => {
+    const meta = getWarehouseMeta(name);
+    const cur = meta.currency || 'USD';
+    geodisByCurrency[cur] = (geodisByCurrency[cur] || 0) + geodisCosts[name].monthlyCost;
+  });
+  Object.entries(geodisByCurrency).forEach(([cur, amt]) => {
+    costParts.push(fmtCurrency(amt, cur));
+    annualParts.push(fmtCurrency(amt * 12, cur));
+  });
+  if (tier2Costs && typeof tier2Costs === 'object') {
+    Object.entries(tier2Costs).forEach(([cur, data]) => {
+      if (data.total > 0) {
+        costParts.push(fmtCurrency(data.total, cur));
+        annualParts.push(fmtCurrency(data.total * 12, cur));
+      }
+    });
+  }
+  const costStr = costParts.length > 0 ? costParts.join(' + ') : 'N/A';
+  const annualStr = annualParts.length > 0 ? annualParts.join(' + ') : 'N/A';
+
+  /* ── Safety counts: AVAILABLE / NEW items (protected) ─────────── */
+  let protectedCount = 0;
+  if (hasDetailData && FULL_REPORT_DATA.length > 0) {
+    FULL_REPORT_DATA.forEach(d => {
+      if (d.deployStatus === 'AVAILABLE' || d.condition === 'NEW') protectedCount++;
+    });
+  }
+
+  /* ── KPI Grid ─────────────────────────────────────────────────── */
+  const kpiGrid = document.getElementById('actionKpiGrid');
+  if (kpiGrid) {
+    kpiGrid.innerHTML = `
+      <div class="kpi-card green">
+        <div class="kpi-label">Safety Rule</div>
+        <div class="kpi-value" style="font-size:18px;">AVAILABLE + NEW Protected</div>
+        <div class="kpi-sub">${protectedCount > 0 ? fmtN(protectedCount) + ' items protected from disposition' : 'Items with AVAILABLE deploy status or NEW condition are excluded from all disposal actions'}</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-label">Total Items to Action</div>
+        <div class="kpi-value">${fmtN(totals.total)}</div>
+        <div class="kpi-sub">Across all aging classifications</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-label">Estimated Monthly Cost</div>
+        <div class="kpi-value" style="font-size:18px;">${costStr}</div>
+        <div class="kpi-sub">Annual: ${annualStr}</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Warehouses Requiring Action</div>
+        <div class="kpi-value">${fmtN(whCount)}</div>
+        <div class="kpi-sub">Locations with aging inventory</div>
+      </div>`;
+  }
+
+  /* ────────────────────────────────────────────────────────────────
+     Phase 1 — Zero-Impact Disposals (0-30 Days)
+     ──────────────────────────────────────────────────────────────── */
+  const phase1El = document.getElementById('phase1Content');
+  if (phase1El) {
+    const actions1 = [];
+
+    /* 1. Dispose UNUSABLE items */
+    const unusableCount = hasDetailData && CONDITION_INDEX['UNUSABLE']
+      ? CONDITION_INDEX['UNUSABLE'].total : null;
+    const unusableText = unusableCount !== null ? `${fmtN(unusableCount)} items` : '~60 items';
+    actions1.push({
+      priority: 'critical',
+      title: 'Dispose UNUSABLE items',
+      meta: `${unusableText} classified as UNUSABLE across all warehouses. These have zero recovery value and no operational dependency.`,
+      risk: 'Low',
+      items: unusableCount || 60,
+      annualSavings: 'Minimal direct savings — removes liability',
+      impact: 'Zero recovery value — pure cost elimination'
+    });
+
+    /* 2. Clear Dead Stock (non-AVAILABLE, non-NEW only) */
+    let safeDeadCount = 0;
+    if (hasDetailData && FULL_REPORT_DATA.length > 0) {
+      FULL_REPORT_DATA.forEach(d => {
+        if (d.classification === 'Dead Stock' && d.deployStatus !== 'AVAILABLE' && d.condition !== 'NEW') safeDeadCount++;
+      });
+    } else {
+      safeDeadCount = totals['Dead Stock'] || 0;
+    }
+
+    /* Aggregate Geodis dead stock cost dynamically by currency */
+    const geodisDeadByCur = {};
+    const geodisDeadWhList = [];
+    for (const wh of Object.keys(geodisCosts)) {
+      const deadCost = (geodisCosts[wh].byClass['Dead Stock'] || {}).cost || 0;
+      const deadItems = (geodisCosts[wh].byClass['Dead Stock'] || {}).items || 0;
+      if (deadCost > 0 || deadItems > 0) {
+        const meta = getWarehouseMeta(wh);
+        const cur = meta.currency || 'USD';
+        geodisDeadByCur[cur] = (geodisDeadByCur[cur] || 0) + deadCost;
+        geodisDeadWhList.push(`${shortName(wh)} (${fmtN(deadItems)})`);
+      }
+    }
+    const geodisDeadAnnualStr = Object.entries(geodisDeadByCur)
+      .map(([cur, cost]) => fmtCurrency(cost * 12, cur)).join(' + ') || 'N/A';
+    const geodisDeadWhStr = geodisDeadWhList.length > 0 ? geodisDeadWhList.join(', ') : 'All Geodis warehouses';
+
+    actions1.push({
+      priority: 'critical',
+      title: 'Clear Dead Stock (non-AVAILABLE, non-NEW only)',
+      meta: `${fmtN(safeDeadCount)} dead stock items eligible for disposal after excluding AVAILABLE and NEW items. Covers ${geodisDeadWhStr}.`,
+      risk: 'Low',
+      items: safeDeadCount,
+      annualSavings: geodisDeadAnnualStr,
+      impact: 'No operational dependency — dead stock has no active use'
+    });
+
+    /* 3. Clear Germany EU dead stock (Used condition only) */
+    let germanyUsedDead = 0;
+    let germanyUsedDeadCost = 0;
+    const germanyWhName = 'Warehouse - Germany EU';
+    const germanyMeta = getWarehouseMeta(germanyWhName);
+    GEODIS_DATA.forEach(d => {
+      if (d.warehouse === germanyWhName && d.classification === 'Dead Stock' && d.condition === 'Used') {
+        germanyUsedDead += d.items;
+        germanyUsedDeadCost += d.monthlyCost;
+      }
+    });
+    actions1.push({
+      priority: 'high',
+      title: 'Clear Germany EU dead stock (Used condition only)',
+      meta: `${fmtN(germanyUsedDead)} Used-condition dead stock items at Germany EU. NEW items kept for review. Highest pallet cost centre (${fmtCurrency(germanyMeta.palletCost || 27.28, germanyMeta.currency)}/pallet).`,
+      risk: 'Low',
+      items: germanyUsedDead,
+      annualSavings: fmtCurrency(germanyUsedDeadCost * 12, germanyMeta.currency),
+      impact: 'Keep NEW for review — only Used dead stock is cleared'
+    });
+
+    /* 4. Contact top 5 dead stock customers */
+    let custText;
+    if (hasDetailData && CUSTOMER_INDEX) {
+      const topCusts = Object.entries(CUSTOMER_INDEX)
+        .map(([name, d]) => ({ name, dead: d['Dead Stock'] || 0 }))
+        .sort((a, b) => b.dead - a.dead)
+        .slice(0, 5);
+      custText = topCusts.map(c => `<strong>${c.name}</strong> (${fmtN(c.dead)} dead)`).join(', ');
+    } else {
+      custText = 'Identify and engage top 5 customers holding the most dead stock items.';
+    }
+    actions1.push({
+      priority: 'high',
+      title: 'Contact top 5 dead stock customers',
+      meta: custText,
+      risk: 'Medium',
+      items: null,
+      annualSavings: 'Depends on customer response',
+      impact: 'Relationship risk — requires customer communication'
+    });
+
+    /* 5. Quick wins: small dead stock locations */
+    const smallDeadWhs = Object.entries(WAREHOUSE_INDEX)
+      .filter(([_, d]) => (d['Dead Stock'] || 0) > 0 && (d['Dead Stock'] || 0) <= 10);
+    const smallDeadNames = smallDeadWhs.map(([name]) => shortName(name)).join(', ');
+    const smallDeadTotal = smallDeadWhs.reduce((s, [_, d]) => s + (d['Dead Stock'] || 0), 0);
+    actions1.push({
+      priority: 'medium',
+      title: 'Quick wins: small dead stock locations',
+      meta: `${smallDeadWhs.length} warehouses with \u226410 dead stock items: ${smallDeadNames || 'None identified'}.`,
+      risk: 'Low',
+      items: smallDeadTotal,
+      annualSavings: 'Low absolute value — operational clean-up',
+      impact: `${fmtN(smallDeadTotal)} items cleared with minimal coordination effort`
+    });
+
+    phase1El.innerHTML = buildPhaseCard(1, 'PHASE 1', 'critical', '0-30 Days', 'Zero-Impact Disposals',
+      'Safe actions that reduce storage costs without impacting day-to-day operations. Items with AVAILABLE deploy status or NEW condition are protected.',
+      actions1);
+  }
+
+  /* ────────────────────────────────────────────────────────────────
+     Phase 2 — Condition-Based Triage (30-90 Days)
+     ──────────────────────────────────────────────────────────────── */
+  const phase2El = document.getElementById('phase2Content');
+  if (phase2El) {
+    const actions2 = [];
+
+    /* 1. Dispose USED_POOR items */
+    let usedPoorCount = 0;
+    if (hasDetailData && CONDITION_INDEX['USED_POOR']) {
+      usedPoorCount = CONDITION_INDEX['USED_POOR'].total;
+    }
+    actions2.push({
+      priority: 'high',
+      title: 'Dispose USED_POOR items',
+      meta: `${fmtN(usedPoorCount)} items in USED_POOR condition. Degraded quality with low redeployment value.`,
+      risk: 'Low',
+      items: usedPoorCount,
+      annualSavings: 'Varies by warehouse location',
+      impact: 'Degraded condition — minimal loss of operational value'
+    });
+
+    /* 2. Redeploy USED_GOOD dormant items */
+    let usedGoodDormant = 0;
+    if (hasDetailData && FULL_REPORT_DATA.length > 0) {
+      FULL_REPORT_DATA.forEach(d => {
+        if (d.condition === 'USED_GOOD' && d.classification === 'Dormant') usedGoodDormant++;
+      });
+    }
+    actions2.push({
+      priority: 'high',
+      title: 'Redeploy USED_GOOD dormant items',
+      meta: `${fmtN(usedGoodDormant)} USED_GOOD dormant items could be redeployed to active use. Needs redeployment targets and logistics coordination.`,
+      risk: 'Medium',
+      items: usedGoodDormant,
+      annualSavings: 'Avoids future dead stock costs',
+      impact: 'Needs redeployment targets — coordinate with operations'
+    });
+
+    /* 3. Tier 2 cost optimization (top warehouses) */
+    const tier2WhCosts = {};
+    TIER2_SUMMARY_DATA.forEach(row => {
+      const whName = row.warehouse || row.name;
+      if (!whName) return;
+      const meta = getWarehouseMeta(whName);
+      if (meta.tier === 1) return; // Skip Tier 1 warehouses
+      const cost = parseFloat(row.cost) || 0;
+      if (!tier2WhCosts[whName]) {
+        tier2WhCosts[whName] = { cost: 0, currency: meta.currency || 'USD' };
+      }
+      tier2WhCosts[whName].cost += cost;
+    });
+    const topTier2 = Object.entries(tier2WhCosts)
+      .sort((a, b) => b[1].cost - a[1].cost)
+      .slice(0, 3);
+    const tier2Str = topTier2.length > 0
+      ? topTier2.map(([name, d]) => `${shortName(name)} (${fmtCurrency(d.cost, d.currency)}/mo)`).join(', ')
+      : 'No Tier 2 cost data available';
+    const tier2SavingsByCur = {};
+    topTier2.forEach(([_, d]) => {
+      tier2SavingsByCur[d.currency] = (tier2SavingsByCur[d.currency] || 0) + d.cost * 12 * 0.15;
+    });
+    const tier2SavingsStr = Object.entries(tier2SavingsByCur)
+      .map(([cur, amt]) => '~' + fmtCurrency(amt, cur)).join(' + ') || 'TBD';
+    actions2.push({
+      priority: 'high',
+      title: 'Tier 2 cost optimization (top warehouses)',
+      meta: `Top Tier 2 warehouses: ${tier2Str}. Review contracts and consolidation options.`,
+      risk: 'Medium',
+      items: null,
+      annualSavings: Object.keys(tier2SavingsByCur).length > 0 ? tier2SavingsStr + ' (est. 15% reduction)' : 'TBD',
+      impact: 'Contract renegotiation — requires vendor engagement'
+    });
+
+    /* 4. Customer engagement program */
+    const customerCount = hasDetailData ? Object.keys(CUSTOMER_INDEX).length : 51;
+    actions2.push({
+      priority: 'medium',
+      title: 'Customer engagement program',
+      meta: `${fmtN(customerCount)} customers with aging inventory. Structured outreach for returns, redeployment, or managed disposal.`,
+      risk: 'Medium',
+      items: null,
+      annualSavings: 'Depends on engagement outcomes',
+      impact: 'Systematic reduction through customer-driven disposition'
+    });
+
+    phase2El.innerHTML = buildPhaseCard(2, 'PHASE 2', 'high', '30-90 Days', 'Condition-Based Triage',
+      'Disposition decisions based on item condition and dormancy. Prioritise degraded items while redeploying serviceable ones.',
+      actions2);
+  }
+
+  /* ────────────────────────────────────────────────────────────────
+     Phase 3 — Lifecycle Policy (90+ Days)
+     ──────────────────────────────────────────────────────────────── */
+  const phase3El = document.getElementById('phase3Content');
+  if (phase3El) {
+    const actions3 = [];
+
+    /* 1. Device age-based lifecycle policy */
+    let oldDeviceCount = 0;
+    if (DEVICE_AGE_INDEX && DEVICE_AGE_INDEX.byYear) {
+      const currentYr = new Date().getFullYear();
+      Object.entries(DEVICE_AGE_INDEX.byYear).forEach(([yr, d]) => {
+        if (parseInt(yr) <= currentYr - 5) oldDeviceCount += d.count;
+      });
+    }
+    actions3.push({
+      priority: 'high',
+      title: 'Device age-based lifecycle policy',
+      meta: `${fmtN(oldDeviceCount)} devices estimated 5+ years old. Priority disposition for aged hardware to reduce obsolete inventory.`,
+      risk: 'Low',
+      items: oldDeviceCount,
+      annualSavings: 'Prevents continued storage of obsolete equipment',
+      impact: 'Low risk — aged devices have diminishing operational value'
+    });
+
+    /* 2. Automated aging alerts */
+    actions3.push({
+      priority: 'medium',
+      title: 'Automated aging alerts',
+      meta: 'Set classification threshold triggers: alert when items cross from Slow Moving to Non-Moving, and Non-Moving to Dormant.',
+      risk: 'Low',
+      items: null,
+      annualSavings: 'Preventative — avoids future cost accumulation',
+      impact: 'Early detection prevents accumulation of aging stock'
+    });
+
+    /* 3. Procurement policy updates */
+    const catMention = hasDetailData ? ' Prioritize COMPUTER category as the largest segment.' : '';
+    actions3.push({
+      priority: 'medium',
+      title: 'Procurement policy updates',
+      meta: `Define max holding periods by product category.${catMention} Auto-escalate items approaching thresholds.`,
+      risk: 'Low',
+      items: null,
+      annualSavings: 'Structural — prevents future aging',
+      impact: 'Prevent future inventory aging through procurement discipline'
+    });
+
+    /* 4. Monthly review cadence */
+    actions3.push({
+      priority: 'medium',
+      title: 'Monthly review cadence with dashboard tracking',
+      meta: 'Dashboard-driven monthly reviews with warehouse managers. Target 10% MoM reduction in aging items. Track progress against baseline.',
+      risk: 'Low',
+      items: null,
+      annualSavings: 'Compounding — sustained reduction over time',
+      impact: 'Sustained month-over-month aging inventory reduction'
+    });
+
+    phase3El.innerHTML = buildPhaseCard(3, 'PHASE 3', 'medium', '90+ Days', 'Lifecycle Policy',
+      'Systemic improvements to prevent future inventory aging. Embed lifecycle management into procurement, alerting, and review processes.',
+      actions3);
+  }
+}
+
+/* Helper: build a phase card HTML string with risk badges and annual savings */
+function buildPhaseCard(num, badge, priorityClass, timeline, title, description, actions) {
+  const phaseClass = 'phase-' + num;
+  const riskColors = { Low: 'var(--green)', Medium: 'var(--orange)', High: 'var(--red)' };
+
+  const actionsHtml = actions.map(a => {
+    const riskColor = riskColors[a.risk] || 'var(--text-dim)';
+    const riskBadge = `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:${riskColor}20;color:${riskColor};margin-left:8px;">RISK: ${a.risk}</span>`;
+    const itemsStr = a.items ? `<span style="margin-left:8px;font-size:11px;color:var(--text-dim);">${fmtN(a.items)} items</span>` : '';
+    const savingsStr = a.annualSavings ? `<p style="font-size:11px;color:var(--green);font-weight:600;margin-top:2px;">Annual Savings: ${a.annualSavings}</p>` : '';
+
+    return `
+    <li class="action-item">
+      <div>
+        <span class="priority-tag ${a.priority}">${a.priority.toUpperCase()}</span>
+        ${riskBadge}${itemsStr}
+        <strong style="display:block;margin-top:4px;">${a.title}</strong>
+        <p class="action-meta">${a.meta}</p>
+        <p class="action-impact">${a.impact}</p>
+        ${savingsStr}
+      </div>
+    </li>`;
+  }).join('');
+
+  return `
+    <div class="phase-card ${phaseClass}">
+      <div class="phase-header">
+        <div>
+          <span class="priority-tag ${priorityClass}">${badge}</span>
+          <span class="phase-timeline" style="margin-left:10px;">${timeline}</span>
+        </div>
+      </div>
+      <h3>${title}</h3>
+      <p style="margin-bottom:16px;">${description}</p>
+      <ul class="action-list">
+        ${actionsHtml}
+      </ul>
+    </div>`;
+}
+
+
+/* ================================================================
+   3. DATA EXPLORER
+   ================================================================ */
+
+/* Tab switcher */
+function switchDataTab(tabId) {
+  document.querySelectorAll('#sec-data .tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('#sec-data .tab-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('dataTab-' + tabId);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('#sec-data .tab-btn').forEach(b => {
+    if (b.getAttribute('data-data-tab') === tabId) b.classList.add('active');
+  });
+  /* Re-filter on tab switch to ensure data is current */
+  filterDataExplorer(tabId);
+}
+
+/* Attach tab click handlers */
+document.querySelectorAll('#sec-data .tab-btn[data-data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchDataTab(btn.getAttribute('data-data-tab')));
+});
+
+/* ── Filter config per tab ─────────────────────────────────────── */
+const DE_TABS = {
+  'de-summary': {
+    searchId: 'deSummarySearch',
+    classId: 'deSummaryClass',
+    tbodyId: 'deSummaryTbody',
+    paginationId: 'deSummaryPagination',
+    getData: () => SUMMARY_DATA,
+    paginated: false,
+    renderRow: deRenderSummaryRow,
+    searchFields: row => [row.warehouse || '', row.classification || '']
+  },
+  'de-geodis': {
+    searchId: 'deGeodisSearch',
+    classId: 'deGeodisClass',
+    tbodyId: 'deGeodisTbody',
+    paginationId: 'deGeodisPagination',
+    getData: () => GEODIS_DATA,
+    paginated: false,
+    renderRow: deRenderGeodisRow,
+    searchFields: row => [row.warehouse || '', row.classification || '', row.condition || '']
+  },
+  'de-tier2sum': {
+    searchId: 'deTier2SumSearch',
+    classId: 'deTier2SumClass',
+    tbodyId: 'deTier2SumTbody',
+    paginationId: 'deTier2SumPagination',
+    getData: () => TIER2_SUMMARY_DATA,
+    paginated: false,
+    renderRow: deRenderTier2SumRow,
+    searchFields: row => [row.warehouse || row.name || '', row.classification || '']
+  },
+  'de-tier2detail': {
+    searchId: 'deTier2DetailSearch',
+    classId: 'deTier2DetailClass',
+    tbodyId: 'deTier2DetailTbody',
+    paginationId: 'deTier2DetailPagination',
+    getData: () => TIER2_DETAIL_DATA,
+    paginated: true,
+    paginationKey: 'de-tier2detail',
+    renderRow: deRenderTier2DetailRow,
+    searchFields: row => [row.warehouse || '', row.customer || '', row.description || '', row.category || '', row.tpl || ''],
+    emptyBanner: 'Connect to API to load 2,317 item-level records'
+  },
+  'de-fullreport': {
+    searchId: 'deFullSearch',
+    classId: 'deFullClass',
+    tbodyId: 'deFullTbody',
+    paginationId: 'deFullPagination',
+    getData: () => FULL_REPORT_DATA,
+    paginated: true,
+    paginationKey: 'de-fullreport',
+    renderRow: deRenderFullReportRow,
+    searchFields: row => [row.warehouse || '', row.customer || '', row.description || '', row.category || '', row.condition || ''],
+    emptyBanner: 'Connect to API to load 8,629 item-level records'
+  }
+};
+
+/* ── Row renderers for each tab ──────────────────────────────── */
+
+function deRenderSummaryRow(row) {
+  const sev = row.classification==='Dead Stock'?'dead':row.classification==='Dormant'?'dormant':row.classification==='Non-Moving'?'non-moving':'slow';
+  return `<tr>
+    <td><strong>${shortName(row.warehouse || '')}</strong></td>
+    <td><span class="severity ${sev}">${row.classification || '-'}</span></td>
+    <td class="text-right">${fmtN(row.items || 0)}</td>
+    <td>${row.date || '-'}</td>
+  </tr>`;
+}
+
+function deRenderGeodisRow(row) {
+  const meta = getWarehouseMeta(row.warehouse || '');
+  const cur = meta.currency || 'USD';
+  const sev = row.classification==='Dead Stock'?'dead':row.classification==='Dormant'?'dormant':row.classification==='Non-Moving'?'non-moving':'slow';
+  return `<tr>
+    <td><strong>${shortName(row.warehouse || '')}</strong></td>
+    <td><span class="severity ${sev}">${row.classification || '-'}</span></td>
+    <td class="text-right">${fmtN(row.items || 0)}</td>
+    <td class="text-right">${fmtCurrency(row.palletCost || 0, cur)}</td>
+    <td class="text-right">${fmtCurrency(row.monthlyCost || 0, cur)}</td>
+    <td>${row.condition || '-'}</td>
+    <td><span class="currency-badge">${cur}</span></td>
+  </tr>`;
+}
+
+function deRenderTier2SumRow(row) {
+  const whName = row.warehouse || '';
+  const meta = getWarehouseMeta(whName);
+  const cur = meta.currency || 'USD';
+  const sev = row.classification==='Dead Stock'?'dead':row.classification==='Dormant'?'dormant':row.classification==='Non-Moving'?'non-moving':'slow';
+  return `<tr>
+    <td><strong>${shortName(whName)}</strong></td>
+    <td><span class="severity ${sev}">${row.classification || '-'}</span></td>
+    <td class="text-right">${fmtCurrency(row.cost || 0, cur)}</td>
+    <td class="text-right">${fmtN(row.items || 0)}</td>
+    <td><span class="currency-badge">${cur}</span></td>
+  </tr>`;
+}
+
+function deRenderTier2DetailRow(row) {
+  const cur = row.currency || 'USD';
+  const desc = (row.description || '').length > 40 ? row.description.substring(0,40) + '...' : (row.description || '-');
+  const sev = row.classification==='Dead Stock'?'dead':row.classification==='Dormant'?'dormant':row.classification==='Non-Moving'?'non-moving':'slow';
+  return `<tr>
+    <td><strong>${shortName(row.warehouse || '')}</strong></td>
+    <td>${row.customer || '-'}</td>
+    <td>${desc}</td>
+    <td>${row.condition || '-'}</td>
+    <td>${row.category || '-'}</td>
+    <td><span class="severity ${sev}">${row.classification || '-'}</span></td>
+    <td>${row.tpl || '-'}</td>
+    <td><span class="currency-badge">${cur}</span></td>
+    <td class="text-right">${fmtCurrency(row.cost || 0, cur)}</td>
+  </tr>`;
+}
+
+function deRenderFullReportRow(row) {
+  const desc = (row.description || '').length > 40 ? row.description.substring(0,40) + '...' : (row.description || '-');
+  const sev = row.classification==='Dead Stock'?'dead':row.classification==='Dormant'?'dormant':row.classification==='Non-Moving'?'non-moving':'slow';
+  return `<tr>
+    <td><strong>${shortName(row.warehouse || '')}</strong></td>
+    <td>${row.customer || '-'}</td>
+    <td>${desc}</td>
+    <td>${row.condition || '-'}</td>
+    <td>${row.category || '-'}</td>
+    <td><span class="severity ${sev}">${row.classification || '-'}</span></td>
+    <td>${row.deployStatus || '-'}</td>
+  </tr>`;
+}
+
+/* ── Core filter/render function ────────────────────────────────── */
+function filterDataExplorer(tabKey) {
+  const cfg = DE_TABS[tabKey];
+  if (!cfg) return;
+
+  const data = cfg.getData();
+  const tbody = document.getElementById(cfg.tbodyId);
+  if (!tbody) return;
+
+  /* Handle empty data with banner */
+  if (cfg.emptyBanner && data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="20">
+      <div class="data-banner">
+        <div class="banner-icon">&#128279;</div>
+        <p>${cfg.emptyBanner}</p>
+      </div>
+    </td></tr>`;
+    const pagEl = document.getElementById(cfg.paginationId);
+    if (pagEl) pagEl.innerHTML = '';
+    return;
+  }
+
+  /* Read filters */
+  const searchEl = document.getElementById(cfg.searchId);
+  const classEl = document.getElementById(cfg.classId);
+  const search = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const classFilter = classEl ? classEl.value : '';
+
+  /* Filter data */
+  let filtered = data;
+  if (search || classFilter) {
+    filtered = data.filter(row => {
+      if (classFilter && (row.classification || '') !== classFilter) return false;
+      if (search) {
+        const fields = cfg.searchFields(row);
+        const match = fields.some(f => f.toLowerCase().includes(search));
+        if (!match) return false;
+      }
+      return true;
+    });
+  }
+
+  /* Render rows — with or without pagination */
+  let rowsToRender;
+  if (cfg.paginated && filtered.length > PAGE_SIZE) {
+    rowsToRender = getPageSlice(filtered, cfg.paginationKey);
+    renderPagination(cfg.paginationKey, filtered.length, cfg.paginationId);
+  } else {
+    rowsToRender = filtered;
+    const pagEl = document.getElementById(cfg.paginationId);
+    if (pagEl) pagEl.innerHTML = '';
+  }
+
+  tbody.innerHTML = rowsToRender.map(cfg.renderRow).join('');
+
+  /* Show count summary if table is empty after filter */
+  if (rowsToRender.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="20" style="text-align:center;color:var(--text-dim);padding:24px;">
+      No matching records${filtered.length === 0 && data.length > 0 ? ' for current filters' : ''}
+    </td></tr>`;
+  }
+}
+
+/* ── Main render entry point ────────────────────────────────────── */
+function renderDataExplorer() {
+  /* Render the active tab (or default to summary) */
+  const activeBtn = document.querySelector('#sec-data .tab-btn.active');
+  const activeTab = activeBtn ? activeBtn.getAttribute('data-data-tab') : 'de-summary';
+  filterDataExplorer(activeTab);
+}
+
+/* ── Debounced search input handlers ────────────────────────────── */
+const _deSearchDebounced = {};
+Object.entries(DE_TABS).forEach(([tabKey, cfg]) => {
+  const searchEl = document.getElementById(cfg.searchId);
+  const classEl = document.getElementById(cfg.classId);
+
+  if (!_deSearchDebounced[tabKey]) {
+    _deSearchDebounced[tabKey] = debounce(() => filterDataExplorer(tabKey), 250);
+  }
+
+  if (searchEl) {
+    searchEl.addEventListener('input', _deSearchDebounced[tabKey]);
+  }
+  if (classEl) {
+    classEl.addEventListener('change', () => filterDataExplorer(tabKey));
+  }
+});
+
+/* ============================================================
+   PART 4 — API Fetch, Navigation, Export, Toast & Init
+   Aging Inventory Dashboard
+   ============================================================
+   Dependencies (from earlier parts):
+     - API_KEY, SHEET_ID, RANGES
+     - SUMMARY_DATA, GEODIS_DATA, TIER2_SUMMARY_DATA,
+       TIER2_DETAIL_DATA, FULL_REPORT_DATA
+     - parseSummaryRows, parseGeodisRows, parseTier2SummaryRows,
+       parseTier2DetailRows, parseFullReportRows
+     - STATIC_SUMMARY, STATIC_GEODIS, STATIC_TIER2_SUMMARY
+     - rebuildIndexes(), WAREHOUSE_INDEX, CUSTOMER_INDEX,
+       CATEGORY_INDEX
+     - apiConnected, hasDetailData, autoRefreshTimer
+     - sectionDirty, markAllDirty()
+     - fmtCurrency, fmtN, shortName, getWarehouseMeta
+     - renderExecutiveSummary, renderWarehouseAnalysis,
+       renderCostAnalysis, renderCustomerAnalysis,
+       renderAssetProfile, renderActionPlan, renderDataExplorer
+     - charts, destroyChart(id)
+     - getSummaryTotals(), getGeodisWarehouseCosts(),
+       getTier2CostByCurrency()
+   ============================================================ */
+
+
+/* ------------------------------------------------------------
+   1. API FETCH — batchGet
+   ------------------------------------------------------------ */
+
+/**
+ * Logs an API-related message to the console with a timestamp
+ * and severity prefix ([INFO], [OK], or [ERROR]).
+ */
+function apiLog(msg, type) {
+  const ts = new Date().toLocaleTimeString();
+  const prefix = type === 'error' ? '[ERROR]'
+               : type === 'success' ? '[OK]'
+               : '[INFO]';
+  console.log(`${prefix} [${ts}] ${msg}`);
+}
+
+/**
+ * Fetches all 5 sheet ranges in a single Google Sheets batchGet
+ * call.  On success, each range is parsed into its corresponding
+ * global data array.  Returns true if the fetch succeeded, false
+ * if it failed or no API key is configured (static fallback).
+ */
+async function fetchAllData() {
+  if (!API_KEY || !SHEET_ID) {
+    apiLog('No API key configured — using static fallback data');
+    return false;
+  }
+
+  // Build batchGet URL with all 5 ranges
+  const params = RANGES.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SHEET_ID)}/values:batchGet?${params}&key=${encodeURIComponent(API_KEY)}`;
+  apiLog('Fetching all 5 sheets via batchGet...');
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    const json = await res.json();
+    const ranges = json.valueRanges || [];
+    apiLog(`Received ${ranges.length} sheet ranges`, 'success');
+
+    // --- Parse each range into its global data array -----------
+
+    // Range 0: Summary (warehouse-level aging classification totals)
+    if (ranges[0]?.values) {
+      const parsed = parseSummaryRows(ranges[0].values);
+      if (parsed.length > 0) {
+        SUMMARY_DATA = parsed;
+        apiLog(`Summary: ${parsed.length} rows`, 'success');
+      }
+    }
+
+    // Range 1: Geodis warehouse cost data (Tier 1)
+    if (ranges[1]?.values) {
+      const parsed = parseGeodisRows(ranges[1].values);
+      if (parsed.length > 0) {
+        GEODIS_DATA = parsed;
+        apiLog(`Geodis: ${parsed.length} rows`, 'success');
+      }
+    }
+
+    // Range 2: Tier 2 summary costs
+    if (ranges[2]?.values) {
+      const parsed = parseTier2SummaryRows(ranges[2].values);
+      if (parsed.length > 0) {
+        TIER2_SUMMARY_DATA = parsed;
+        apiLog(`Tier 2 Summary: ${parsed.length} rows`, 'success');
+      }
+    }
+
+    // Range 3: Tier 2 item-level detail
+    if (ranges[3]?.values) {
+      const parsed = parseTier2DetailRows(ranges[3].values);
+      if (parsed.length > 0) {
+        TIER2_DETAIL_DATA = parsed;
+        apiLog(`Tier 2 Detail: ${parsed.length} rows`, 'success');
+      }
+    }
+
+    // Range 4: Full report (all items across all warehouses)
+    if (ranges[4]?.values) {
+      const parsed = parseFullReportRows(ranges[4].values);
+      if (parsed.length > 0) {
+        FULL_REPORT_DATA = parsed;
+        apiLog(`Full Report: ${parsed.length} rows`, 'success');
+      }
+    }
+
+    // Flag whether detailed item-level data is available
+    hasDetailData = FULL_REPORT_DATA.length > 0;
+    return true;
+
+  } catch (e) {
+    apiLog('batchGet error: ' + e.message, 'error');
+    return false;
+  }
+}
+
+
+/* ------------------------------------------------------------
+   2. REFRESH & AUTO-REFRESH
+   ------------------------------------------------------------ */
+
+/**
+ * Manual refresh: re-fetches all data, rebuilds indexes, and
+ * re-renders the active section.  Shows a spinner on the
+ * refresh icon while loading.
+ */
+async function refreshData() {
+  const icon = document.getElementById('refreshIcon');
+  if (icon) icon.classList.add('refresh-spin');
+
+  const ok = await fetchAllData();
+
+  if (ok) {
+    apiConnected = true;
+    rebuildIndexes();
+    updateApiUI();
+    renderAll();
+    showToast(
+      'Data refreshed from Google Sheets — '
+        + (hasDetailData ? 'all 5 sheets loaded' : '3 sheets loaded'),
+      'success'
+    );
+  } else if (API_KEY) {
+    showToast('Refresh failed — using cached data', 'error');
+  } else {
+    showToast('No API key — showing static data', 'error');
+  }
+
+  // Allow the spin animation to finish gracefully
+  if (icon) setTimeout(() => icon.classList.remove('refresh-spin'), 500);
+}
+
+/**
+ * Sets up a silent background refresh every 5 minutes.
+ * Clears any existing timer first to avoid duplicates.
+ */
+function setupAutoRefresh() {
+  clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(async () => {
+    const ok = await fetchAllData();
+    if (ok) {
+      apiConnected = true;
+      rebuildIndexes();
+      updateApiUI();
+      renderAll();
+    }
+  }, 300000); // 5 minutes
+}
+
+
+/* ------------------------------------------------------------
+   3. API STATUS UI
+   ------------------------------------------------------------ */
+
+/**
+ * Updates the sidebar API status indicator (dot colour and
+ * label) and the report-date badge.
+ */
+function updateApiUI() {
+  const dot = document.getElementById('apiDot');
+  const txt = document.getElementById('apiStatusText');
+
+  if (dot) dot.className = 'api-dot ' + (apiConnected ? 'connected' : 'static');
+  if (txt) txt.textContent = apiConnected ? 'Live — Google Sheets' : 'Static Fallback';
+
+  // Show the report date from the first summary row
+  const reportDate = SUMMARY_DATA.length > 0 ? SUMMARY_DATA[0].date : '--';
+  const el = document.getElementById('lastUpdated');
+  if (el) el.textContent = 'Report: ' + reportDate;
+}
+
+
+/* ------------------------------------------------------------
+   4. NAVIGATION
+   ------------------------------------------------------------ */
+
+/**
+ * Wire up sidebar nav links.  Clicking a link:
+ *   1. Deactivates all links and sections
+ *   2. Activates the clicked link and its matching section
+ *   3. Renders the section (only if dirty or first visit)
+ */
+document.querySelectorAll('.nav-link[data-section]').forEach(link => {
+  link.addEventListener('click', () => {
+    // Deactivate all nav links
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+
+    // Toggle section visibility
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    const sec = link.dataset.section;
+    document.getElementById('sec-' + sec).classList.add('active');
+
+    // Render the newly-active section
+    renderSection(sec);
+  });
+});
+
+/**
+ * Renders a single section by name, then clears its dirty flag.
+ */
+function renderSection(sec) {
+  switch (sec) {
+    case 'executive': renderExecutiveSummary();  break;
+    case 'warehouse': renderWarehouseAnalysis(); break;
+    case 'cost':      renderCostAnalysis();      break;
+    case 'customer':  renderCustomerAnalysis();  break;
+    case 'asset':     renderAssetProfile();      break;
+    case 'action':    renderActionPlan();        break;
+    case 'data':      renderDataExplorer();      break;
+  }
+  sectionDirty[sec] = false;
+}
+
+/**
+ * Re-renders everything: updates API status, marks all sections
+ * dirty, then renders whichever section is currently active.
+ */
+function renderAll() {
+  updateApiUI();
+  markAllDirty();
+
+  // Determine which section is currently visible
+  const active = document.querySelector('.nav-link.active');
+  const sec = active ? active.dataset.section : 'executive';
+  renderSection(sec);
+}
+
+
+/* ------------------------------------------------------------
+   5. TOAST NOTIFICATIONS
+   ------------------------------------------------------------ */
+
+/**
+ * Shows a brief toast notification at the bottom of the screen.
+ * @param {string} msg  — The message to display
+ * @param {string} type — 'success', 'error', or omit for neutral
+ */
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+
+  t.textContent = msg;
+  t.className = 'toast ' + (type || '') + ' show';
+
+  // Auto-dismiss after 3.5 seconds
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+
+/* ------------------------------------------------------------
+   6. EXPORT FUNCTIONS
+   ------------------------------------------------------------ */
+
+/**
+ * Generic CSV download helper.  Creates a temporary <a> element,
+ * triggers the download, and cleans up.
+ */
+function downloadCSV(filename, csvStr) {
+  const blob = new Blob([csvStr], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+/* --- Executive Summary CSV ---------------------------------- */
+
+function exportExecutiveCSV() {
+  const t = getSummaryTotals();
+  let csv = 'Classification,Items,Percentage\n';
+
+  ['Dead Stock', 'Dormant', 'Non-Moving', 'Slow Moving'].forEach(c => {
+    csv += `${c},${t[c]},${pctOf(t[c], t.total)}%\n`;
+  });
+  csv += `Total,${t.total},100%\n`;
+
+  downloadCSV('aging_executive_summary.csv', csv);
+}
+
+/* --- Warehouse Analysis CSV --------------------------------- */
+
+function exportWarehouseCSV() {
+  const whs = Object.values(WAREHOUSE_INDEX).sort((a, b) => b.total - a.total);
+
+  let csv = 'Warehouse,Region,Tier,Dead Stock,Dormant,Non-Moving,Slow Moving,'
+          + 'Total,Risk Score,Monthly Cost,Currency\n';
+
+  whs.forEach(w => {
+    const cost = w.monthlyCost !== null ? w.monthlyCost.toFixed(2) : 'N/A';
+    const cur  = w.costCurrency || 'N/A';
+    csv += `"${shortName(w.name)}",${w.region},${tierLabel(w.tier)},`
+         + `${w['Dead Stock']},${w['Dormant']},${w['Non-Moving']},${w['Slow Moving']},`
+         + `${w.total},${riskScore(w)},${cost},${cur}\n`;
+  });
+
+  downloadCSV('aging_warehouse_analysis.csv', csv);
+}
+
+/* --- Warehouse Analysis Excel (SheetJS or XML fallback) ----- */
+
+function exportWarehouseExcel() {
+  const whs = Object.values(WAREHOUSE_INDEX).sort((a, b) => b.total - a.total);
+
+  // Build a 2-D array (header + data rows)
+  const data = [[
+    'Warehouse', 'Region', 'Tier', 'Dead Stock', 'Dormant',
+    'Non-Moving', 'Slow Moving', 'Total', 'Risk Score',
+    'Monthly Cost', 'Currency'
+  ]];
+
+  whs.forEach(w => {
+    data.push([
+      shortName(w.name),
+      w.region,
+      tierLabel(w.tier),
+      w['Dead Stock'],
+      w['Dormant'],
+      w['Non-Moving'],
+      w['Slow Moving'],
+      w.total,
+      riskScore(w),
+      w.monthlyCost !== null ? w.monthlyCost : 'N/A',
+      w.costCurrency || 'N/A'
+    ]);
+  });
+
+  // Prefer SheetJS if available
+  if (typeof XLSX !== 'undefined') {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Warehouse Analysis');
+    XLSX.writeFile(wb, 'aging_warehouse_analysis.xlsx');
+  } else {
+    // Fallback: XML Spreadsheet 2003 format
+    let xml = '<?xml version="1.0"?>'
+            + '<?mso-application progid="Excel.Sheet"?>'
+            + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+            + ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+            + '<Worksheet ss:Name="Warehouse Analysis"><Table>';
+
+    data.forEach(row => {
+      xml += '<Row>'
+           + row.map(c =>
+               `<Cell><Data ss:Type="${typeof c === 'number' ? 'Number' : 'String'}">${c}</Data></Cell>`
+             ).join('')
+           + '</Row>';
+    });
+
+    xml += '</Table></Worksheet></Workbook>';
+
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'aging_warehouse_analysis.xls';
+    a.click();
+  }
+}
+
+/* --- Cost Analysis CSV -------------------------------------- */
+
+function exportCostCSV() {
+  let csv = 'Warehouse,Tier,Classification,Items,Monthly Cost,Currency,Source\n';
+
+  // Geodis (Tier 1)
+  GEODIS_DATA.forEach(d => {
+    const cur = getWarehouseMeta(d.warehouse).currency;
+    csv += `"${shortName(d.warehouse)}",Tier 1,"${d.classification}",`
+         + `${d.items},${d.monthlyCost.toFixed(2)},${cur},Geodis Actual\n`;
+  });
+
+  // Tier 2 Summary (skip Tier 1 warehouses — they use Geodis costs above)
+  TIER2_SUMMARY_DATA.forEach(d => {
+    const meta = getWarehouseMeta(d.warehouse);
+    if (meta.tier === 1) return;
+    csv += `"${shortName(d.warehouse)}",Tier 2,"${d.classification}",`
+         + `${d.items},${d.cost.toFixed(2)},${meta.currency},Tier 2 Estimated\n`;
+  });
+
+  downloadCSV('aging_cost_analysis.csv', csv);
+}
+
+/* --- Customer Analysis CSV ---------------------------------- */
+
+function exportCustomerCSV() {
+  if (!hasDetailData || Object.keys(CUSTOMER_INDEX).length === 0) {
+    showToast('No customer data available — connect to API first', 'error');
+    return;
+  }
+
+  const customers = Object.entries(CUSTOMER_INDEX)
+    .map(([name, d]) => ({ name, ...d }))
+    .sort((a, b) => b.total - a.total);
+
+  let csv = 'Customer,Total,Dead Stock,Dormant,Non-Moving,Slow Moving,Warehouses,Primary Category\n';
+
+  customers.forEach(c => {
+    let primaryCategory = '-';
+    let maxCatCount = 0;
+    if (c.categories) {
+      for (const cat in c.categories) {
+        if (c.categories[cat] > maxCatCount) { maxCatCount = c.categories[cat]; primaryCategory = cat; }
+      }
+    }
+    csv += `"${c.name}",${c.total},${c['Dead Stock'] || 0},${c['Dormant'] || 0},`
+         + `${c['Non-Moving'] || 0},${c['Slow Moving'] || 0},${c.warehouseCount || 0},"${primaryCategory}"\n`;
+  });
+
+  downloadCSV('aging_customer_analysis.csv', csv);
+}
+
+/* --- Asset Profile CSV -------------------------------------- */
+
+function exportAssetCSV() {
+  if (!hasDetailData || Object.keys(CATEGORY_INDEX).length === 0) {
+    showToast('No asset data available — connect to API first', 'error');
+    return;
+  }
+
+  const categories = Object.entries(CATEGORY_INDEX)
+    .map(([name, d]) => ({ name, ...d }))
+    .sort((a, b) => b.total - a.total);
+  const catTotal = categories.reduce((s, c) => s + c.total, 0);
+
+  let csv = 'Category,Dead Stock,Dormant,Non-Moving,Slow Moving,Total,% of Total\n';
+  categories.forEach(c => {
+    csv += `"${c.name}",${c['Dead Stock'] || 0},${c['Dormant'] || 0},`
+         + `${c['Non-Moving'] || 0},${c['Slow Moving'] || 0},${c.total},${pctOf(c.total, catTotal)}%\n`;
+  });
+
+  downloadCSV('aging_asset_profile.csv', csv);
+}
+
+/* --- Action Plan CSV ---------------------------------------- */
+
+function exportActionPlanCSV() {
+  let csv = 'Phase,Priority,Risk,Action,Details,Annual Savings\n';
+
+  csv += '"Phase 1 — Zero-Impact (0-30 Days)",Critical,Low,"Dispose UNUSABLE items","Zero recovery value — pure cost elimination","Minimal — removes liability"\n';
+  csv += '"Phase 1 — Zero-Impact (0-30 Days)",Critical,Low,"Clear Dead Stock (non-AVAILABLE non-NEW)","No operational dependency","Geodis storage cost elimination"\n';
+  csv += '"Phase 1 — Zero-Impact (0-30 Days)",High,Low,"Clear Germany EU dead stock (Used only)","Highest pallet-cost centre — keep NEW for review","EUR storage savings"\n';
+  csv += '"Phase 1 — Zero-Impact (0-30 Days)",High,Medium,"Contact top 5 dead stock customers","Customer-driven clearance","Depends on response"\n';
+  csv += '"Phase 1 — Zero-Impact (0-30 Days)",Medium,Low,"Quick wins: small dead stock locations","Minimal coordination effort","Low absolute value"\n';
+  csv += '"Phase 2 — Condition Triage (30-90 Days)",High,Low,"Dispose USED_POOR items","Degraded condition — minimal value loss","Varies by location"\n';
+  csv += '"Phase 2 — Condition Triage (30-90 Days)",High,Medium,"Redeploy USED_GOOD dormant items","Needs redeployment targets","Avoids future dead stock"\n';
+  csv += '"Phase 2 — Condition Triage (30-90 Days)",High,Medium,"Tier 2 cost optimization","Contract renegotiation","Est. 15% reduction"\n';
+  csv += '"Phase 2 — Condition Triage (30-90 Days)",Medium,Medium,"Customer engagement program","Systematic outreach","Depends on outcomes"\n';
+  csv += '"Phase 3 — Lifecycle Policy (90+ Days)",High,Low,"Device age-based lifecycle policy","Priority disposition for 5+ year devices","Prevents obsolete storage"\n';
+  csv += '"Phase 3 — Lifecycle Policy (90+ Days)",Medium,Low,"Automated aging alerts","Threshold triggers","Preventative"\n';
+  csv += '"Phase 3 — Lifecycle Policy (90+ Days)",Medium,Low,"Procurement policy updates","Max holding periods by category","Structural prevention"\n';
+  csv += '"Phase 3 — Lifecycle Policy (90+ Days)",Medium,Low,"Monthly review cadence","Dashboard-driven reviews","Compounding reduction"\n';
+
+  downloadCSV('aging_action_plan.csv', csv);
+}
+
+/* --- Data Explorer tab-specific CSV ------------------------- */
+
+function exportDataTabCSV(tabKey) {
+  let csv = '';
+  let filename = '';
+
+  switch (tabKey) {
+
+    case 'de-summary':
+      csv = 'Warehouse,Classification,Total Items,Date\n';
+      SUMMARY_DATA.forEach(d => {
+        csv += `"${d.warehouse}","${d.classification}",${d.items},"${d.date}"\n`;
+      });
+      filename = 'aging_summary_data.csv';
+      break;
+
+    case 'de-geodis':
+      csv = 'Warehouse,Classification,Items,Pallet Cost,Monthly Cost,Condition,Date\n';
+      GEODIS_DATA.forEach(d => {
+        csv += `"${d.warehouse}","${d.classification}",${d.items},`
+             + `${d.palletCost},${d.monthlyCost},"${d.condition}","${d.date}"\n`;
+      });
+      filename = 'aging_geodis_data.csv';
+      break;
+
+    case 'de-tier2sum':
+      csv = 'Warehouse,Classification,Storage Cost,Items,Currency\n';
+      TIER2_SUMMARY_DATA.forEach(d => {
+        const cur = getWarehouseMeta(d.warehouse).currency;
+        csv += `"${d.warehouse}","${d.classification}",${d.cost},${d.items},${cur}\n`;
+      });
+      filename = 'aging_tier2_summary.csv';
+      break;
+
+    case 'de-tier2detail':
+      csv = 'Warehouse,Customer,SKU,Description,Condition,Category,Classification,3PL,Currency,Cost\n';
+      TIER2_DETAIL_DATA.forEach(d => {
+        csv += `"${d.warehouse}","${d.customer}","${d.sku}","${d.description}",`
+             + `"${d.condition}","${d.category}","${d.classification}",`
+             + `"${d.tpl}","${d.currency}",${d.cost}\n`;
+      });
+      filename = 'aging_tier2_detail.csv';
+      break;
+
+    case 'de-fullreport':
+      csv = 'Warehouse,Customer,SKU,Description,Condition,Category,Classification,Deploy Status\n';
+      FULL_REPORT_DATA.forEach(d => {
+        csv += `"${d.warehouse}","${d.customer}","${d.sku}","${d.description}",`
+             + `"${d.condition}","${d.category}","${d.classification}",`
+             + `"${d.deployStatus}"\n`;
+      });
+      filename = 'aging_full_report.csv';
+      break;
+  }
+
+  if (csv) downloadCSV(filename, csv);
+}
+
+/**
+ * Exports whichever Data Explorer tab is currently active.
+ */
+function exportAllDataCSV() {
+  const activeTab = document.querySelector('[data-data-tab].tab-btn.active');
+  if (activeTab) exportDataTabCSV(activeTab.dataset.dataTab);
+}
+
+
+/* ------------------------------------------------------------
+   7. INITIALIZATION
+   ------------------------------------------------------------ */
+
+/**
+ * Boot sequence:
+ *   1. Build indexes from static/fallback data so the UI
+ *      renders instantly.
+ *   2. Attempt a live API fetch; if successful, rebuild
+ *      indexes and re-render with fresh data.
+ *   3. Start the 5-minute auto-refresh timer.
+ */
+(async function init() {
+  // Phase 1 — Render immediately with static/fallback data
+  rebuildIndexes();
+  renderAll();
+
+  // Phase 2 — Attempt live API connection
+  const ok = await fetchAllData();
+  if (ok) {
+    apiConnected = true;
+    rebuildIndexes();
+    renderAll();
+
+    // Count how many sheets returned data
+    const sheets = [
+      SUMMARY_DATA.length > 0,
+      GEODIS_DATA.length > 0,
+      TIER2_SUMMARY_DATA.length > 0,
+      TIER2_DETAIL_DATA.length > 0,
+      FULL_REPORT_DATA.length > 0
+    ].filter(Boolean).length;
+
+    showToast(
+      `Connected — ${sheets} sheet${sheets !== 1 ? 's' : ''} loaded`
+        + (hasDetailData ? ' (full detail available)' : ''),
+      'success'
+    );
+  }
+
+  // Phase 3 — Final UI update and auto-refresh
+  updateApiUI();
+  setupAutoRefresh();
+})();
+
+</script>
+</body>
+</html>
