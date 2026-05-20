@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aging Inventory Dashboard | Firstbase</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -232,6 +233,48 @@ tbody tr:hover{background:#eef2ff}
 .stat-item .stat-label{color:var(--text-dim);font-size:11px}
 .stat-item .stat-value{font-size:20px;font-weight:700}
 
+/* ── Authentication Overlay ────────────────────────────────── */
+.auth-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+  display:flex;align-items:center;justify-content:center;
+  z-index:9999;
+}
+.auth-container{width:100%;max-width:420px;padding:20px}
+.auth-card{
+  background:var(--surface);border-radius:16px;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+  overflow:hidden;
+}
+.auth-logo{
+  background:linear-gradient(135deg,#1e293b 0%,#334155 100%);
+  color:#fff;padding:32px;text-align:center;
+}
+.auth-logo h1{font-size:28px;font-weight:700;margin-bottom:4px}
+.auth-logo p{font-size:14px;color:#cbd5e1}
+.auth-content{padding:32px}
+.auth-content h2{font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text)}
+.auth-content p{font-size:14px;color:var(--text-dim);margin-bottom:24px;line-height:1.6}
+#googleSignInButton{margin:24px 0}
+.auth-error{
+  background:#fee;border:1px solid #fcc;
+  color:#c33;padding:12px;border-radius:6px;
+  font-size:13px;margin-top:16px;
+}
+.user-info{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 12px;background:rgba(255,255,255,.05);
+  border-radius:6px;font-size:12px;
+}
+.user-info img{width:28px;height:28px;border-radius:50%}
+.user-email{color:#94a3b8}
+.sign-out-btn{
+  background:transparent;border:none;color:#64748b;
+  cursor:pointer;padding:4px 8px;font-size:11px;
+  text-decoration:underline;
+}
+.sign-out-btn:hover{color:#e2e8f0}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media(max-width:1100px){.grid-2{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr 1fr}}
 @media(max-width:768px){
@@ -242,6 +285,29 @@ tbody tr:hover{background:#eef2ff}
 </style>
 </head>
 <body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     AUTHENTICATION OVERLAY
+     ═══════════════════════════════════════════════════════════ -->
+<div id="authOverlay" class="auth-overlay">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <h1>Firstbase</h1>
+        <p>Aging Inventory Dashboard</p>
+      </div>
+      <div class="auth-content">
+        <h2>Sign In Required</h2>
+        <p>Please sign in with your Firstbase or AppDirect email to access this dashboard.</p>
+        <div id="googleSignInButton"></div>
+        <div id="authError" class="auth-error" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Main app container (hidden until authenticated) -->
+<div id="appContainer" style="display:none;">
 
 <!-- ═══════════════════════════════════════════════════════════
      SIDEBAR
@@ -970,6 +1036,163 @@ tbody tr:hover{background:#eef2ff}
 
 </div><!-- /main -->
 <script>
+// ============================================================================
+// AUTHENTICATION
+// ============================================================================
+
+const ALLOWED_DOMAINS = ['firstbase.com', 'appdirect.com'];
+const GOOGLE_CLIENT_ID = 'http://175628222582-0bllveutilh1bm96fq5pkotgbqo8vc67.apps.googleusercontent.com/'; // Replace with your actual Google OAuth Client ID
+
+// Check if user is already authenticated
+let currentUser = null;
+
+/**
+ * Initialize Google Sign-In
+ */
+function initGoogleSignIn() {
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleCredentialResponse,
+    auto_select: false,
+  });
+
+  google.accounts.id.renderButton(
+    document.getElementById('googleSignInButton'),
+    {
+      theme: 'outline',
+      size: 'large',
+      text: 'signin_with',
+      width: 300
+    }
+  );
+}
+
+/**
+ * Handle Google Sign-In response
+ */
+function handleCredentialResponse(response) {
+  try {
+    // Decode JWT token to get user info
+    const payload = parseJwt(response.credential);
+    const email = payload.email;
+    const domain = email.split('@')[1];
+
+    // Check if domain is allowed
+    if (ALLOWED_DOMAINS.includes(domain)) {
+      currentUser = {
+        email: email,
+        name: payload.name,
+        picture: payload.picture
+      };
+
+      // Store authentication in sessionStorage
+      sessionStorage.setItem('authenticated', 'true');
+      sessionStorage.setItem('userEmail', email);
+      sessionStorage.setItem('userName', payload.name);
+      sessionStorage.setItem('userPicture', payload.picture || '');
+
+      // Show app, hide auth overlay
+      showApp();
+    } else {
+      showAuthError(`Access denied. Only @firstbase.com and @appdirect.com email addresses are allowed.`);
+    }
+  } catch (error) {
+    showAuthError('Authentication failed. Please try again.');
+    console.error('Auth error:', error);
+  }
+}
+
+/**
+ * Parse JWT token
+ */
+function parseJwt(token) {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+  }).join(''));
+  return JSON.parse(jsonPayload);
+}
+
+/**
+ * Show authentication error
+ */
+function showAuthError(message) {
+  const errorDiv = document.getElementById('authError');
+  errorDiv.textContent = message;
+  errorDiv.style.display = 'block';
+}
+
+/**
+ * Show main app after successful authentication
+ */
+function showApp() {
+  document.getElementById('authOverlay').style.display = 'none';
+  document.getElementById('appContainer').style.display = 'flex';
+
+  // Add user info to sidebar footer
+  addUserInfoToSidebar();
+
+  // Start the main app initialization
+  initApp();
+}
+
+/**
+ * Add user info and sign-out button to sidebar
+ */
+function addUserInfoToSidebar() {
+  const sidebarFooter = document.querySelector('.sidebar-footer');
+  if (sidebarFooter && currentUser) {
+    const userInfoHTML = `
+      <div class="user-info">
+        ${currentUser.picture ? `<img src="${currentUser.picture}" alt="User">` : ''}
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#fff">${currentUser.name}</div>
+          <div class="user-email">${currentUser.email}</div>
+        </div>
+      </div>
+      <button class="sign-out-btn" onclick="signOut()">Sign Out</button>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)"></div>
+    `;
+    sidebarFooter.insertAdjacentHTML('afterbegin', userInfoHTML);
+  }
+}
+
+/**
+ * Sign out function
+ */
+function signOut() {
+  sessionStorage.clear();
+  currentUser = null;
+  google.accounts.id.disableAutoSelect();
+  location.reload();
+}
+
+/**
+ * Check authentication on page load
+ */
+function checkAuth() {
+  const isAuthenticated = sessionStorage.getItem('authenticated');
+  if (isAuthenticated === 'true') {
+    currentUser = {
+      email: sessionStorage.getItem('userEmail'),
+      name: sessionStorage.getItem('userName'),
+      picture: sessionStorage.getItem('userPicture')
+    };
+    showApp();
+  } else {
+    // Initialize Google Sign-In
+    if (typeof google !== 'undefined') {
+      initGoogleSignIn();
+    } else {
+      // Wait for Google API to load
+      window.onload = function() {
+        initGoogleSignIn();
+      };
+    }
+  }
+}
+
 // ============================================================================
 // PART 2: JavaScript Configuration, Data, Helpers & Indexes
 // Aging Inventory Dashboard
@@ -4650,7 +4873,11 @@ function exportAllDataCSV() {
  *      indexes and re-render with fresh data.
  *   3. Start the 5-minute auto-refresh timer.
  */
-(async function init() {
+/**
+ * Initialize the main dashboard app
+ * Called after successful authentication
+ */
+async function initApp() {
   // Phase 1 — Render immediately with static/fallback data
   rebuildIndexes();
   renderAll();
@@ -4681,8 +4908,17 @@ function exportAllDataCSV() {
   // Phase 3 — Final UI update and auto-refresh
   updateApiUI();
   setupAutoRefresh();
-})();
+}
+
+// ============================================================================
+// START APPLICATION
+// ============================================================================
+// Check authentication on page load
+checkAuth();
 
 </script>
+
+</div> <!-- End of appContainer -->
+
 </body>
 </html>
